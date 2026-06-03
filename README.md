@@ -92,7 +92,7 @@ always use the wrapper.
 
 ```bash
 export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-arm64
-./gradlew assembleDebug      # builds app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleDebug      # builds app/build/outputs/apk/debug/multistream-debug.apk
 ./gradlew test               # runs the JVM unit tests
 ./gradlew installDebug       # installs to a connected device/emulator (adb)
 ```
@@ -102,8 +102,8 @@ Release build (signed + R8-shrunk):
 ```bash
 # Signing creds live in keystore.properties (git-ignored): storeFile, storePassword, keyAlias, keyPassword.
 # A dev key (multistream-release.keystore) is used by default; swap in your own for Play distribution.
-./gradlew :app:assembleRelease   # -> app/build/outputs/apk/release/app-release.apk  (~1.9 MB, v2-signed)
-./gradlew :app:bundleRelease     # -> app/build/outputs/bundle/release/app-release.aab (Play upload)
+./gradlew :app:assembleRelease   # -> app/build/outputs/apk/release/multistream-release.apk  (~2.3 MB, v2-signed)
+./gradlew :app:bundleRelease     # -> app/build/outputs/bundle/release/multistream-release.aab (Play upload)
 ```
 
 `local.properties` (git-ignored) points Gradle at the SDK: `sdk.dir=/home/r/Android/Sdk`.

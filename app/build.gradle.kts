@@ -56,6 +56,11 @@ android {
     }
 }
 
+// Name the build artifacts after the app, not the Gradle module (":app").
+base {
+    archivesName = "multistream"
+}
+
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:data"))
