@@ -180,8 +180,15 @@ class DisneyApi(
         client.await(request).use { response ->
             val text = response.body?.string().orEmpty()
             if (response.code == 401 || response.code == 403) throw DisneyApiException("Unauthorized", authError = true)
-            if (!response.isSuccessful) throw DisneyApiException("HTTP ${response.code}")
-            return NetJson.parseToJsonElement(text).obj() ?: throw DisneyApiException("Expected a JSON object response")
+            if (!response.isSuccessful) throw DisneyApiException("HTTP ${response.code}: ${text.take(160)}")
+            val obj = NetJson.parseToJsonElement(text).obj() ?: throw DisneyApiException("Expected a JSON object response")
+            // bamgrid returns HTTP 200 with a GraphQL `errors` array on failure; surface the real message.
+            obj["errors"].array()?.firstOrNull()?.obj()?.let { error ->
+                val message = error["message"].string() ?: "Disney+ request failed"
+                val code = error["extensions"].obj()?.get("code").string()
+                throw DisneyApiException(if (code != null) "$message ($code)" else message)
+            }
+            return obj
         }
     }
 
