@@ -1,0 +1,73 @@
+package it.allard.multistream.provider.molotov
+
+import it.allard.multistream.core.model.MediaType
+import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.net.buildClient
+import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+class MolotovApiTest {
+    private lateinit var server: MockWebServer
+    private lateinit var api: MolotovApi
+
+    @Before fun setUp() {
+        server = MockWebServer()
+        server.start()
+        api = MolotovApi(client = buildClient(), baseUrl = server.url("/").toString())
+    }
+
+    @After fun tearDown() = server.shutdown()
+
+    @Test fun login_parsesTokens_andSendsAgentHeader() = runBlocking {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"auth":{"access_token":"AT","refresh_token":"RT"},"account":{"id":42,"user_type":"premium"}}""",
+            ),
+        )
+        val tokens = api.login("a@b.c", "pw")
+        assertEquals("AT", tokens.accessToken)
+        assertEquals("RT", tokens.refreshToken)
+        assertEquals("42", tokens.userId)
+
+        val request = server.takeRequest()
+        assertEquals("/v3.1/auth/login", request.path)
+        assertTrue(request.getHeader("X-Molotov-Agent")!!.contains("android_tv_app"))
+    }
+
+    @Test fun search_collectsTilesFromSections() = runBlocking {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"sections":[{"title":"Results","items":[
+                  {"type":"program","id":"p1","slug":"lupin","title":"Lupin","image_bundle":{"poster":{"medium":{"url":"https://img/lupin.jpg"}}}},
+                  {"type":"vod","id":"v9","slug":"oss117","title":"OSS 117"},
+                  {"type":"person","id":"x","title":"Some Actor"}
+                ]}]}
+                """.trimIndent(),
+            ),
+        )
+        val results = api.search("lupin", "AT", Region.FR)
+        assertEquals(2, results.size) // person is filtered out
+        val lupin = results.first { it.title == "Lupin" }
+        assertEquals(MediaType.SERIES, lupin.type)
+        assertEquals("https://www.molotov.tv/lupin", lupin.ref.deepLinkHint)
+        assertEquals("https://img/lupin.jpg", lupin.posterUrl)
+        assertEquals(MediaType.MOVIE, results.first { it.title == "OSS 117" }.type)
+    }
+
+    @Test fun search_unauthorized_throwsAuthError() {
+        server.enqueue(MockResponse().setResponseCode(401))
+        try {
+            runBlocking { api.search("x", "badtoken", Region.FR) }
+            throw AssertionError("expected MolotovApiException")
+        } catch (e: MolotovApiException) {
+            assertTrue(e.authError)
+        }
+    }
+}

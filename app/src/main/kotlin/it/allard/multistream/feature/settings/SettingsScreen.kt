@@ -12,24 +12,30 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.di.LocalAppGraph
@@ -41,10 +47,19 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen() {
     val graph = LocalAppGraph.current
-    val viewModel = appViewModel { SettingsViewModel(graph.registry, graph.settings) }
+    val viewModel = appViewModel { SettingsViewModel(graph.registry, graph.settings, graph.secrets) }
     val rows by viewModel.rows.collectAsState()
+    val loggedIn by viewModel.loggedIn.collectAsState()
+    val message by viewModel.message.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    LaunchedEffect(message) {
+        message?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.consumeMessage()
+        }
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -74,6 +89,14 @@ fun SettingsScreen() {
                             onSelect = { viewModel.setRegion(row.provider, it) },
                         )
                     }
+                    if (row.provider.capabilities.requiresAuth) {
+                        Spacer(Modifier.height(4.dp))
+                        LoginSection(
+                            isLoggedIn = loggedIn[row.provider.id] == true,
+                            onLogin = { email, password -> viewModel.login(row.provider, email, password) },
+                            onLogout = { viewModel.logout(row.provider) },
+                        )
+                    }
                 }
             }
         }
@@ -90,6 +113,39 @@ fun SettingsScreen() {
             }
         }
     }
+}
+
+@Composable
+private fun LoginSection(isLoggedIn: Boolean, onLogin: (String, String) -> Unit, onLogout: () -> Unit) {
+    if (isLoggedIn) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Text("Logged in ✓", style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = onLogout) { Text("Log out") }
+        }
+        return
+    }
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    OutlinedTextField(
+        value = email,
+        onValueChange = { email = it },
+        label = { Text("Email") },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(Modifier.height(4.dp))
+    OutlinedTextField(
+        value = password,
+        onValueChange = { password = it },
+        label = { Text("Password") },
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Spacer(Modifier.height(4.dp))
+    Button(onClick = { onLogin(email, password) }) { Text("Log in") }
 }
 
 private fun capabilitySummary(capabilities: ProviderCapabilities): String = buildList {

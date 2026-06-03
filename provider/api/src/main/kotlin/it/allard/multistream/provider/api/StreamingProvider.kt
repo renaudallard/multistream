@@ -5,6 +5,7 @@ import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
+import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Season
@@ -25,6 +26,12 @@ interface StreamingProvider {
 
     /** Establish/refresh a session. No-op for open providers. */
     suspend fun ensureSession(config: ProviderConfig): SessionState = SessionState.Anonymous
+
+    /**
+     * Authenticate with new credentials and return secrets to persist (encrypted), or null if the
+     * provider needs no login. Called by the Settings login form.
+     */
+    suspend fun login(username: String, password: String): ProviderSecrets? = null
 
     /** Catalog search. Only called when [ProviderCapabilities.canSearch] is true. */
     suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> = emptyList()

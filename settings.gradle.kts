@@ -24,6 +24,7 @@ rootProject.name = "multistream"
 include(":app")
 include(":core:model")
 include(":core:data")
+include(":core:net")
 include(":provider:api")
 include(":provider:netflix")
 include(":provider:disney")

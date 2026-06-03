@@ -5,22 +5,27 @@ import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
+import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.Launcher
 import it.allard.multistream.provider.api.ProviderCapabilities
+import it.allard.multistream.provider.api.ProviderConfig
+import it.allard.multistream.provider.api.SessionState
 import it.allard.multistream.provider.api.StreamingProvider
 
 /**
- * Zattoo (DACH live TV + replay). The zapi catalog supports full search (M1), but the app's
- * manifest only exposes `zattoo://zattoo.com` with no title path, so title-level deep linking is
- * deferred: v1 is search + launch-app-only. A title-level [ProviderRef.deepLinkHint], once
- * reverse-engineered, will start being honored automatically.
+ * Zattoo (DACH live TV + replay). Search runs over the zapi program guide. Title-level deep links
+ * are not exposed by the app manifest, so launch opens the app (search still works).
  */
-class ZattooProvider : StreamingProvider {
+class ZattooProvider(
+    private val api: ZattooApi = ZattooApi(),
+) : StreamingProvider {
     override val id = ProviderId.ZATTOO
     override val displayName = "Zattoo"
     override val packageName = "com.zattoo.player"
     override val capabilities = ProviderCapabilities(
+        canSearch = true,
         canDeepLinkToTitle = false,
         isLiveTv = true,
         requiresRegion = true,
@@ -28,6 +33,27 @@ class ZattooProvider : StreamingProvider {
     )
 
     override fun supportedRegions(): Set<Region> = setOf(Region.CH, Region.DE)
+
+    override suspend fun login(username: String, password: String): ProviderSecrets {
+        api.login(username, password)
+        return ProviderSecrets(extra = mapOf("email" to username, "password" to password))
+    }
+
+    override suspend fun ensureSession(config: ProviderConfig): SessionState {
+        if (api.isLoggedIn()) return SessionState.Ready
+        val email = config.secrets.extra["email"]
+        val password = config.secrets.extra["password"]
+        if (email != null && password != null) {
+            return runCatching { api.login(email, password) }
+                .fold({ SessionState.Ready }, { SessionState.NeedsLogin(it.message ?: "Login failed") })
+        }
+        return SessionState.NeedsLogin("Zattoo login required")
+    }
+
+    override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        return runCatching { api.search(query, region) }.getOrDefault(emptyList())
+    }
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? =
         ref.deepLinkHint?.let { Launcher.viewIntent(context, it, packageName) }
