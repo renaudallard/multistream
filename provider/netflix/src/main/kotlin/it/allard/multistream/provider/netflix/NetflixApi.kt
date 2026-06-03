@@ -1,6 +1,7 @@
 package it.allard.multistream.provider.netflix
 
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.await
@@ -25,7 +26,7 @@ class NetflixApi(
     private val client: OkHttpClient = buildClient(),
     private val homeUrl: String = "https://www.netflix.com/browse",
 ) {
-    private data class Session(val pathEvaluatorUrl: String, val authUrl: String)
+    private data class Session(val memberApi: String, val authUrl: String)
 
     @Volatile
     private var session: Session? = null
@@ -39,7 +40,7 @@ class NetflixApi(
         val term = query.replace("\\", "").replace("\"", "")
         val path = "[\"search\",\"byTerm\",\"|$term\",\"titles\",{\"from\":0,\"to\":24},[\"summary\",\"title\"]]"
         val body = "path=$path&authURL=${current.authUrl}"
-        val url = current.pathEvaluatorUrl +
+        val url = "${current.memberApi}/pathEvaluator" +
             "?drmSystem=widevine&falcor_server=0.1.0&withSize=false&materialize=false&original_path=/shakti/mre/pathEvaluator"
         val request = Request.Builder()
             .url(url)
@@ -65,8 +66,22 @@ class NetflixApi(
                 ?: throw NetflixApiException("Netflix member API URL missing")
             val authUrl = models["userInfo"].obj()?.get("data").obj()?.get("authURL").string()
                 ?: throw NetflixApiException("Netflix authURL missing", authError = true)
-            return Session("$memberApi/pathEvaluator", authUrl)
+            return Session(memberApi, authUrl)
         }
+    }
+
+    /** Seasons + episodes for a show via the clean /metadata endpoint (no Falcor needed). */
+    suspend fun getSeasons(videoId: String, cookies: String): List<Season> {
+        val current = session ?: prepareSession(cookies).also { session = it }
+        val url = "${current.memberApi}/metadata?movieid=$videoId&authURL=${current.authUrl}"
+        val request = Request.Builder()
+            .url(url)
+            .header("Cookie", cookies)
+            .header("Accept", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .get()
+            .build()
+        return NetflixParser.parseSeasons(exec(request))
     }
 
     private suspend fun exec(request: Request): JsonObject {

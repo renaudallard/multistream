@@ -7,6 +7,7 @@ import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.DeepLinks
 import it.allard.multistream.provider.api.Launcher
@@ -27,12 +28,20 @@ class DisneyProvider(
     override val packageName = "com.disney.disneyplus"
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canGetDetails = true,
+        canListEpisodes = true,
         canDeepLinkToTitle = true,
         requiresAuth = true,
     )
 
     @Volatile
     private var accessToken: String? = null
+
+    override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> {
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        val token = accessToken ?: return emptyList()
+        return runCatching { api.getSeasons(ref.providerTitleId, token) }.getOrDefault(emptyList())
+    }
 
     override suspend fun login(username: String, password: String): ProviderSecrets {
         val tokens = api.login(username, password)

@@ -1,6 +1,7 @@
 package it.allard.multistream.provider.disney
 
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.array
@@ -57,6 +58,20 @@ class DisneyApi(
         val encoded = URLEncoder.encode(query, "UTF-8")
         val root = execContentGet("$apiBase/explore/v1.7/search?query=$encoded", accessToken)
         return DisneyParser.parseSearch(root, region)
+    }
+
+    /** Entity page -> season list, then one call per season for its episodes. */
+    suspend fun getSeasons(entityId: String, accessToken: String): List<Season> {
+        val page = execContentGet("$apiBase/explore/v1.9/page/entity-$entityId", accessToken)
+        return DisneyParser.parseSeasonRefs(page).map { season ->
+            val episodes = runCatching {
+                DisneyParser.parseEpisodes(
+                    execContentGet("$apiBase/explore/v1.7/season/${season.id}", accessToken),
+                    season.number,
+                )
+            }.getOrDefault(emptyList())
+            Season(season.number, season.name, episodes)
+        }
     }
 
     private suspend fun obtainClientApiKey(): String {

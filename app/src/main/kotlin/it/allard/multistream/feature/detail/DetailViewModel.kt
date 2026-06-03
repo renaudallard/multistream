@@ -43,7 +43,7 @@ class DetailViewModel(
 
     init {
         viewModelScope.launch {
-            val title = interactor.getTitle(key)
+            val title = interactor.loadDetails(key)
             _state.update { it.copy(loading = false, title = title) }
         }
         viewModelScope.launch {

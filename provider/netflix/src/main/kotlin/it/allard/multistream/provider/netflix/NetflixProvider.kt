@@ -7,6 +7,7 @@ import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.DeepLinks
 import it.allard.multistream.provider.api.Launcher
@@ -28,6 +29,8 @@ class NetflixProvider(
     override val packageName = "com.netflix.mediaclient"
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canGetDetails = true,
+        canListEpisodes = true,
         canDeepLinkToTitle = true,
         canInAppSearchDeepLink = true,
         requiresAuth = true,
@@ -35,6 +38,12 @@ class NetflixProvider(
 
     @Volatile
     private var cookies: String? = null
+
+    override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> {
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        val cookie = cookies ?: return emptyList()
+        return runCatching { api.getSeasons(ref.providerTitleId, cookie) }.getOrDefault(emptyList())
+    }
 
     override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
         loginUrl = "https://www.netflix.com/login",

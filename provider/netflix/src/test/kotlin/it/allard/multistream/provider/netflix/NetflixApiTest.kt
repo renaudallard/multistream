@@ -58,6 +58,30 @@ class NetflixApiTest {
         assertTrue(post.body.readUtf8().contains("authURL=AUTH123"))
     }
 
+    @Test fun getSeasons_parsesMetadata() = runBlocking {
+        val memberApi = server.url("/api/shakti/BUILD").toString().removeSuffix("/")
+        server.enqueue(
+            MockResponse().setBody(
+                "<script>netflix.reactContext = {\"models\":{\"services\":{\"data\":{\"memberapi\":\"$memberApi\"}}," +
+                    "\"userInfo\":{\"data\":{\"authURL\":\"A\"}}}};</script>",
+            ),
+        )
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"video":{"seasons":[{"seq":1,"episodes":[
+                   {"seq":1,"title":"Pilot","runtime":1800},{"seq":2,"title":"Two","runtime":1800}
+                ]}]}}""".trimIndent(),
+            ),
+        )
+        val seasons = api.getSeasons("80057281", "NetflixId=x")
+        assertEquals(1, seasons.size)
+        assertEquals(2, seasons[0].episodes.size)
+        assertEquals("Pilot", seasons[0].episodes[0].title)
+        assertEquals(30, seasons[0].episodes[0].runtimeMin)
+        assertTrue(server.takeRequest().path!!.contains("/browse"))
+        assertTrue(server.takeRequest().path!!.contains("/metadata?movieid=80057281"))
+    }
+
     @Test fun notLoggedIn_throwsAuthError() {
         server.enqueue(MockResponse().setBody("<html>login page without reactContext</html>"))
         try {

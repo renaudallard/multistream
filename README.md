@@ -21,7 +21,7 @@ providers into a registry.
 | Capability | State |
 |---|---|
 | Deep-link **launch** into all 5 apps | ✅ (title page; Zattoo opens the app, see notes) |
-| **Local** watch tracking (watched/unwatched, series next-episode, watchlist, continue-watching) | ✅ |
+| **Local** watch tracking (watched/unwatched, series next-episode, watchlist, continue-watching) | ✅ series episode lists come from Disney+ / Netflix detail |
 | Per-provider **region** setting + **login** | ✅ |
 | Phone + Android-TV adaptive shell | ✅ form-factor detection; poster art (Coil), incremental search, results badged by service with LIVE/REPLAY labels (TV-optimized leanback UI still later) |
 | Catalog **search** — Molotov, Zattoo, Disney+ | ✅ implemented (M1–M2); needs live verification on a device with your accounts |
@@ -47,10 +47,12 @@ for the full reverse-engineering methodology.
 - **Disney+** uses the bamgrid GraphQL API (per the `pydisney` wrapper): client API key from the
   homepage → `registerDevice` → `login` → `switchProfile` for tokens, then `GET /explore/v1.7/search`.
   Full GraphQL query text is sent (no persisted-hash issue). PIN-protected profiles are skipped, and
-  tokens are cached/refreshed because repeated logins can trigger account blocks.
+  tokens are cached/refreshed because repeated logins can trigger account blocks. Series episode
+  lists come from the entity page plus one call per season.
 - **Netflix** app API is MSL-encrypted, so search uses the website (Kodi CastagnaIT addon): a WebView
-  login captures cookies, the page's `reactContext` yields the member API base + authURL, and a
-  `pathEvaluator` Falcor request returns the matched titles. Fragile (BUILD_ID rotation, bot defenses).
+  login captures cookies, the page's `reactContext` yields the member API base + authURL, a
+  `pathEvaluator` Falcor request returns the matched titles, and `/metadata` returns full
+  seasons/episodes. Fragile (BUILD_ID rotation, bot defenses).
 - **Prime Video** (most fragile, best-effort) uses the primevideo.com web search with cookies from a
   WebView login, walking the embedded `text/template` JSON for titles (as the Kodi amazon addon's
   GrabJSON does). Unverified; expect to adjust it against live traffic.

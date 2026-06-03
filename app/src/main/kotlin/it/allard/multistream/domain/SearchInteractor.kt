@@ -2,6 +2,7 @@ package it.allard.multistream.domain
 
 import it.allard.multistream.core.data.SecretStore
 import it.allard.multistream.core.data.SettingsRepository
+import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Title
 import it.allard.multistream.core.model.TitleKey
@@ -52,8 +53,25 @@ class SearchInteractor(
         }
     }
 
-    /** Resolve a full title (with seasons) for the detail screen. */
+    /** Resolve a title from the sample catalog or the last search results. */
     suspend fun getTitle(key: TitleKey): Title? = SampleCatalog.byKey(key) ?: index[key.serialize()]
+
+    /** Like [getTitle], but enriches a series that has no seasons from the best episode provider. */
+    suspend fun loadDetails(key: TitleKey): Title? {
+        val base = getTitle(key) ?: return null
+        if (base.seasons.isNotEmpty() || base.type != MediaType.SERIES) return base
+        val availability = base.availabilities.firstOrNull {
+            registry.get(it.provider)?.capabilities?.canListEpisodes == true
+        } ?: return base
+        val provider = registry.get(availability.provider) ?: return base
+        val region = availability.ref.region
+            ?: settings.region(provider.id)
+            ?: provider.supportedRegions().firstOrNull()
+            ?: Region("US")
+        val config = ProviderConfig(region, enabled = true, secrets = secrets.read(provider.id))
+        val seasons = runCatching { provider.getSeasons(availability.ref, config) }.getOrDefault(emptyList())
+        return if (seasons.isNotEmpty()) base.copy(seasons = seasons) else base
+    }
 
     private suspend fun ProducerScope<SearchUpdate>.emit(results: List<UnifiedSearchResult>, loading: Boolean) {
         send(SearchUpdate(mergeAndIndex(synchronized(results) { results.toList() }), loading))

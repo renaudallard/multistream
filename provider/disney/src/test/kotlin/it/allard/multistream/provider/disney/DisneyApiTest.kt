@@ -72,6 +72,31 @@ class DisneyApiTest {
         }
     }
 
+    @Test fun getSeasons_parsesEntityAndSeasonPages() = runBlocking {
+        server.enqueue(
+            jsonBody(
+                """{"data":{"page":{"containers":[
+                   {"type":"details"},
+                   {"type":"episodes","seasons":[{"id":"s1","visuals":{"name":"Season 1"}}]}
+                ]}}}""",
+            ),
+        )
+        server.enqueue(
+            jsonBody(
+                """{"data":{"season":{"items":[
+                   {"visuals":{"episodeNumber":1,"episodeTitle":"Pilot","durationMs":1800000}},
+                   {"visuals":{"episodeNumber":2,"episodeTitle":"Second","durationMs":1800000}}
+                ]}}}""",
+            ),
+        )
+        val seasons = api.getSeasons("e1", "FINAL")
+        assertEquals(1, seasons.size)
+        assertEquals(1, seasons[0].seasonNumber)
+        assertEquals(2, seasons[0].episodes.size)
+        assertEquals("Pilot", seasons[0].episodes[0].title)
+        assertEquals(30, seasons[0].episodes[0].runtimeMin)
+    }
+
     private fun jsonBody(body: String) =
         MockResponse().setHeader("Content-Type", "application/json").setBody(body)
 }
