@@ -1,6 +1,5 @@
 package it.allard.multistream.feature.settings
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import it.allard.multistream.core.data.SecretStore
@@ -66,7 +65,6 @@ class SettingsViewModel(
                 _loggedIn.update { it + (provider.id to true) }
                 _message.value = "${provider.displayName}: logged in"
             } else {
-                Log.w("multistream", "${provider.displayName} login failed", result.exceptionOrNull())
                 _message.value = "${provider.displayName}: ${result.exceptionOrNull()?.message ?: "login failed"}"
             }
         }
@@ -82,7 +80,6 @@ class SettingsViewModel(
                 _loggedIn.update { it + (provider.id to true) }
                 _message.value = "${provider.displayName}: logged in"
             } else {
-                Log.w("multistream", "${provider.displayName} login failed", result.exceptionOrNull())
                 _message.value = "${provider.displayName}: ${result.exceptionOrNull()?.message ?: "login failed"}"
             }
         }
