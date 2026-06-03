@@ -61,6 +61,15 @@ base {
     archivesName = "multistream"
 }
 
+// Release APK is plain "multistream.apk" (no "-release"); debug stays distinguishable.
+(extensions.getByName("android") as com.android.build.gradle.AppExtension).applicationVariants.all {
+    val variant = this
+    outputs.all {
+        (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+            if (variant.buildType.name == "release") "multistream.apk" else "multistream-${variant.buildType.name}.apk"
+    }
+}
+
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:data"))
