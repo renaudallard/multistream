@@ -100,6 +100,8 @@ class NetflixApi(
         val FORM_MEDIA = "application/x-www-form-urlencoded".toMediaType()
         const val USER_AGENT =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
-        val REACT_CONTEXT = Regex("netflix\\.reactContext\\s*=\\s*(\\{.*?});\\s*</script>", RegexOption.DOT_MATCHES_ALL)
+        // Note: the closing brace must be escaped (\\}) — a literal '}' is a syntax error on
+        // Android's stricter ICU regex engine (API 34+), even though the JVM accepts it.
+        val REACT_CONTEXT = Regex("netflix\\.reactContext\\s*=\\s*(\\{.*?\\});\\s*</script>", RegexOption.DOT_MATCHES_ALL)
     }
 }
