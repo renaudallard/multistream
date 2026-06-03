@@ -18,30 +18,32 @@ import it.allard.multistream.provider.prime.PrimeVideoProvider
 import it.allard.multistream.provider.zattoo.ZattooProvider
 
 /**
- * Hand-written dependency graph (no DI framework). Holds the app-wide singletons and composes
- * the five providers into the registry. This is the single place that knows the full provider set.
+ * Hand-written dependency graph (no DI framework). Every singleton is lazy so that constructing the
+ * graph in [it.allard.multistream.MultistreamApp.onCreate] does no disk/keystore work — a failing
+ * component is built (and can fail gracefully) only when first used, never at app launch.
  */
 class AppGraph(context: Context) {
     private val appContext = context.applicationContext
 
-    val database: MultistreamDatabase = DatabaseFactory.create(appContext)
+    val database: MultistreamDatabase by lazy { DatabaseFactory.create(appContext) }
+    val settings: SettingsRepository by lazy { SettingsRepository(appContext) }
+    val secrets: SecretStore by lazy { SecretStore(appContext) }
+    val watchRepository: WatchRepository by lazy { WatchRepository(database) }
+    val cacheRepository: CacheRepository by lazy { CacheRepository(database) }
 
-    val settings = SettingsRepository(appContext)
-    val secrets = SecretStore(appContext)
-    val watchRepository = WatchRepository(database)
-    val cacheRepository = CacheRepository(database)
+    val providers: List<StreamingProvider> by lazy {
+        listOf(
+            NetflixProvider(),
+            DisneyProvider(),
+            PrimeVideoProvider(),
+            MolotovProvider(),
+            ZattooProvider(),
+        )
+    }
 
-    val providers: List<StreamingProvider> = listOf(
-        NetflixProvider(),
-        DisneyProvider(),
-        PrimeVideoProvider(),
-        MolotovProvider(),
-        ZattooProvider(),
-    )
-
-    val registry = ProviderRegistry(providers, settings)
-    val searchInteractor = SearchInteractor(registry, settings, secrets)
-    val launchController = LaunchController(appContext)
+    val registry: ProviderRegistry by lazy { ProviderRegistry(providers, settings) }
+    val searchInteractor: SearchInteractor by lazy { SearchInteractor(registry, settings, secrets) }
+    val launchController: LaunchController by lazy { LaunchController(appContext) }
 }
 
 val LocalAppGraph = staticCompositionLocalOf<AppGraph> { error("AppGraph not provided") }

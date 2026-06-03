@@ -2,6 +2,7 @@ package it.allard.multistream.core.data
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import it.allard.multistream.core.model.ProviderId
@@ -9,29 +10,69 @@ import it.allard.multistream.core.model.ProviderSecrets
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.util.concurrent.ConcurrentHashMap
 
-/** Per-provider session secrets in a Keystore-backed encrypted store. Never logged. */
+/**
+ * Per-provider session secrets in a Keystore-backed encrypted store. Resilient by design: if the
+ * encrypted store can't be created (a corrupted keyset is the usual cause), it clears and retries
+ * once, then falls back to an in-memory store so login degrades for the session instead of crashing
+ * the app. Never throws. Never logs secret values.
+ */
 class SecretStore(context: Context) {
     private val json = Json { ignoreUnknownKeys = true }
+    private val memory = ConcurrentHashMap<String, ProviderSecrets>()
+    private val prefs: SharedPreferences? = createEncryptedPrefs(context.applicationContext)
 
-    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
-        context,
-        "multistream_secrets",
-        MasterKey.Builder(context).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
-
-    fun read(provider: ProviderId): ProviderSecrets =
-        prefs.getString(provider.name, null)
+    fun read(provider: ProviderId): ProviderSecrets {
+        val store = prefs ?: return memory[provider.name] ?: ProviderSecrets.EMPTY
+        return store.getString(provider.name, null)
             ?.let { runCatching { json.decodeFromString<ProviderSecrets>(it) }.getOrNull() }
             ?: ProviderSecrets.EMPTY
+    }
 
     fun write(provider: ProviderId, secrets: ProviderSecrets) {
-        prefs.edit().putString(provider.name, json.encodeToString(secrets)).apply()
+        val store = prefs
+        if (store == null) {
+            memory[provider.name] = secrets
+            return
+        }
+        runCatching { store.edit().putString(provider.name, json.encodeToString(secrets)).apply() }
+            .onFailure { memory[provider.name] = secrets }
     }
 
     fun clear(provider: ProviderId) {
-        prefs.edit().remove(provider.name).apply()
+        memory.remove(provider.name)
+        runCatching { prefs?.edit()?.remove(provider.name)?.apply() }
+    }
+
+    private fun createEncryptedPrefs(context: Context): SharedPreferences? = try {
+        buildEncryptedPrefs(context)
+    } catch (e: Exception) {
+        // A corrupted keyset is the usual cause; clear the store and try once more.
+        runCatching {
+            context.deleteSharedPreferences(PREFS_NAME)
+            buildEncryptedPrefs(context)
+        }.getOrElse {
+            Log.w(TAG, "EncryptedSharedPreferences unavailable; using in-memory secrets for this session", e)
+            null
+        }
+    }
+
+    private fun buildEncryptedPrefs(context: Context): SharedPreferences {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        return EncryptedSharedPreferences.create(
+            context,
+            PREFS_NAME,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }
+
+    private companion object {
+        const val PREFS_NAME = "multistream_secrets"
+        const val TAG = "SecretStore"
     }
 }
