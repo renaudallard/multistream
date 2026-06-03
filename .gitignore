@@ -1,0 +1,28 @@
+# Gradle / build
+.gradle/
+build/
+**/build/
+.kotlin/
+
+# Local environment (never commit machine-specific SDK paths)
+local.properties
+
+# IDE
+.idea/
+*.iml
+
+# Android artifacts
+*.apk
+*.aab
+*.xapk
+*.keystore
+*.jks
+
+# Reverse-engineering working dir (decompiled / extracted apks)
+tmp/
+
+# Agent dirs must never live in the repo
+.claude/
+
+# OS
+.DS_Store

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+
+    <!-- Package visibility (Android 11+) so we can resolve deep links into the streaming apps. -->
+    <queries>
+        <package android:name="com.netflix.mediaclient" />
+        <package android:name="com.disney.disneyplus" />
+        <package android:name="com.amazon.amazonvideo.livingroom" />
+        <package android:name="com.amazon.avod.thirdpartyclient" />
+        <package android:name="tv.molotov.app" />
+        <package android:name="com.zattoo.player" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".MultistreamApp"
+        android:allowBackup="true"
+        android:banner="@drawable/ic_banner"
+        android:icon="@drawable/ic_logo"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Multistream">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

@@ -1,0 +1,36 @@
+package it.allard.multistream.provider.api
+
+import it.allard.multistream.core.model.ProviderSecrets
+import it.allard.multistream.core.model.Region
+
+/**
+ * What a provider can actually do. Capabilities drive graceful degradation: the UI reads these
+ * flags and never assumes. A provider may support only launch + local tracking (everything false
+ * except a deep-link flag) and the app still works.
+ */
+data class ProviderCapabilities(
+    val canSearch: Boolean = false,
+    val canGetDetails: Boolean = false,
+    val canListEpisodes: Boolean = false,
+    val canDeepLinkToTitle: Boolean = false,
+    val canDeepLinkToEpisode: Boolean = false,
+    val canDeepLinkToPlay: Boolean = false,
+    val canInAppSearchDeepLink: Boolean = false,
+    val isLiveTv: Boolean = false,
+    val requiresRegion: Boolean = false,
+    val requiresAuth: Boolean = false,
+)
+
+/** Per-provider runtime config, assembled from settings + the encrypted secret store. */
+data class ProviderConfig(
+    val region: Region,
+    val enabled: Boolean,
+    val secrets: ProviderSecrets,
+)
+
+sealed interface SessionState {
+    data object Ready : SessionState
+    data object Anonymous : SessionState
+    data class NeedsLogin(val reason: String) : SessionState
+    data class Error(val cause: Throwable) : SessionState
+}

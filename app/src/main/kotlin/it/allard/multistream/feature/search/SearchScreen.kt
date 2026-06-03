@@ -1,0 +1,105 @@
+package it.allard.multistream.feature.search
+
+import android.widget.Toast
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.dp
+import it.allard.multistream.R
+import it.allard.multistream.core.model.TitleKey
+import it.allard.multistream.di.LocalAppGraph
+import it.allard.multistream.ui.appViewModel
+import it.allard.multistream.ui.components.TitleCard
+
+@Composable
+fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
+    val graph = LocalAppGraph.current
+    val viewModel = appViewModel { SearchViewModel(graph.searchInteractor, graph.registry, graph.launchController) }
+    val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
+
+    LaunchedEffect(state.message) {
+        state.message?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.consumeMessage()
+        }
+    }
+
+    Column(Modifier.fillMaxSize().padding(16.dp)) {
+        OutlinedTextField(
+            value = state.query,
+            onValueChange = viewModel::onQueryChange,
+            label = { Text(stringResource(R.string.search_hint)) },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            keyboardActions = KeyboardActions(onSearch = { viewModel.submit() }),
+            trailingIcon = {
+                IconButton(onClick = viewModel::submit) {
+                    Icon(Icons.Default.Search, contentDescription = "Search")
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Spacer(Modifier.height(12.dp))
+        if (state.loading) {
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+            Spacer(Modifier.height(12.dp))
+        }
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(state.results, key = { it.key.serialize() }) { title ->
+                TitleCard(title) { onOpenTitle(title.key) }
+            }
+            if (state.searched && state.results.isEmpty() && !state.loading) {
+                item { Text("No catalog matches yet.", style = MaterialTheme.typography.bodyMedium) }
+            }
+            if (state.searched && state.degrade.isNotEmpty()) {
+                item {
+                    Text(
+                        text = "Search directly in:",
+                        style = MaterialTheme.typography.titleSmall,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+                items(state.degrade, key = { it.id.name }) { provider ->
+                    ListItem(
+                        headlineContent = { Text(provider.displayName) },
+                        supportingContent = {
+                            Text(
+                                if (provider.capabilities.canInAppSearchDeepLink) "Opens in-app search" else "Opens the app",
+                            )
+                        },
+                        trailingContent = {
+                            TextButton(onClick = { viewModel.openInApp(provider) }) { Text("Open") }
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
