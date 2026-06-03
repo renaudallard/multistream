@@ -26,8 +26,8 @@ class ZattooApiTest {
     @After fun tearDown() = server.shutdown()
 
     @Test fun login_then_search_filtersProgramGuideByTitle() = runBlocking {
-        // 1) homepage with the app token, 2) hello, 3) login, 4) power_guide
-        server.enqueue(MockResponse().setBody("<html>var x; window.appToken = 'APPTOKEN'; more</html>"))
+        // 1) token.json (app token), 2) hello, 3) login, 4) power_guide
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("""{"success":true,"session_token":"APPTOKEN"}"""))
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("""{"success":true}"""))
         server.enqueue(
             MockResponse().setHeader("Content-Type", "application/json")
@@ -57,8 +57,8 @@ class ZattooApiTest {
         assertTrue(results.any { it.title == "Tatort" })
         assertTrue(results.any { it.title == "Tatort Wien" })
 
-        // app token request hit the homepage; hello carried the token
-        assertEquals("/", server.takeRequest().path)
+        // token.json fetched the app token; hello carried it
+        assertTrue(server.takeRequest().path!!.contains("/token.json"))
         assertTrue(server.takeRequest().body.readUtf8().contains("client_app_token=APPTOKEN"))
     }
 }

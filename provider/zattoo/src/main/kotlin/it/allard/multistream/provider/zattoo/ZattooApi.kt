@@ -78,6 +78,10 @@ class ZattooApi(
     }
 
     private suspend fun loadAppToken(): String {
+        // Modern Zattoo serves the app token as JSON at /token.json; fall back to the legacy
+        // window.appToken HTML marker (still used by some reseller portals).
+        runCatching { execObject(get("$base/token.json"))["session_token"].string() }.getOrNull()
+            ?.let { return it }
         client.await(get("$base/")).use { response ->
             val html = response.body?.string().orEmpty()
             val marker = "window.appToken = '"
@@ -87,8 +91,8 @@ class ZattooApi(
                 val to = html.indexOf('\'', from)
                 if (to > from) return html.substring(from, to)
             }
-            throw ZattooApiException("Could not read Zattoo app token from homepage")
         }
+        throw ZattooApiException("Could not read Zattoo app token")
     }
 
     private fun get(url: String): Request =
