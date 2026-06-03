@@ -23,7 +23,7 @@ providers into a registry.
 | Deep-link **launch** into all 5 apps | ✅ (title page; Zattoo opens the app, see notes) |
 | **Local** watch tracking (watched/unwatched, series next-episode, watchlist, continue-watching) | ✅ |
 | Per-provider **region** setting + **login** | ✅ |
-| Phone + Android-TV adaptive shell | ✅ (form-factor detection; TV-polished UI is later) |
+| Phone + Android-TV adaptive shell | ✅ form-factor detection; poster art (Coil), incremental search, results badged by service with LIVE/REPLAY labels (TV-optimized leanback UI still later) |
 | Catalog **search** — Molotov, Zattoo, Disney+ | ✅ implemented (M1–M2); needs live verification on a device with your accounts |
 | Catalog **search** — Netflix, Prime | ✅ best-effort web search via WebView login (M3); Netflix is fragile, Prime the most fragile/unverified |
 

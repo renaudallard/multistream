@@ -10,16 +10,21 @@ import it.allard.multistream.core.model.mergeResults
 import it.allard.multistream.di.ProviderRegistry
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.channels.ProducerScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+
+/** One emission of a streaming search: the titles merged so far, and whether more are pending. */
+data class SearchUpdate(val results: List<Title>, val loading: Boolean)
 
 /**
- * Federated search: fan out across enabled+searchable providers in parallel (each guarded by a
- * timeout and try/catch so one slow/failed provider never breaks the others), then merge into
- * unified titles. In M0 the live providers return nothing and results come from [SampleCatalog].
+ * Federated search that streams results: each enabled+searchable provider runs in parallel (guarded
+ * by a timeout/try-catch so one slow/failed provider never blocks the others), and the merged list
+ * is re-emitted as each provider returns. In M4 the live providers are joined by [SampleCatalog].
  */
 class SearchInteractor(
     private val registry: ProviderRegistry,
@@ -28,19 +33,37 @@ class SearchInteractor(
 ) {
     private val index = ConcurrentHashMap<String, Title>()
 
-    suspend fun search(query: String): List<Title> = coroutineScope {
+    fun search(query: String): Flow<SearchUpdate> = channelFlow {
         val providers = registry.searchable()
-        val live = providers
-            .map { provider -> async { runProviderSearch(provider, query) } }
-            .awaitAll()
-            .flatten()
-        val merged = mergeResults(live + SampleCatalog.search(query))
-        merged.forEach { index[it.key.serialize()] = it }
-        merged
+        val accumulated = mutableListOf<UnifiedSearchResult>()
+        synchronized(accumulated) { accumulated.addAll(SampleCatalog.search(query)) }
+        val remaining = AtomicInteger(providers.size)
+
+        emit(accumulated, loading = providers.isNotEmpty())
+        for (provider in providers) {
+            launch {
+                val results = runProviderSearch(provider, query)
+                val snapshot = synchronized(accumulated) {
+                    accumulated.addAll(results)
+                    accumulated.toList()
+                }
+                send(SearchUpdate(mergeAndIndex(snapshot), loading = remaining.decrementAndGet() > 0))
+            }
+        }
     }
 
     /** Resolve a full title (with seasons) for the detail screen. */
     suspend fun getTitle(key: TitleKey): Title? = SampleCatalog.byKey(key) ?: index[key.serialize()]
+
+    private suspend fun ProducerScope<SearchUpdate>.emit(results: List<UnifiedSearchResult>, loading: Boolean) {
+        send(SearchUpdate(mergeAndIndex(synchronized(results) { results.toList() }), loading))
+    }
+
+    private fun mergeAndIndex(results: List<UnifiedSearchResult>): List<Title> {
+        val merged = mergeResults(results)
+        merged.forEach { index[it.key.serialize()] = it }
+        return merged
+    }
 
     private suspend fun runProviderSearch(provider: StreamingProvider, query: String): List<UnifiedSearchResult> =
         withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
@@ -53,6 +76,6 @@ class SearchInteractor(
         } ?: emptyList()
 
     private companion object {
-        const val PROVIDER_TIMEOUT_MS = 4_000L
+        const val PROVIDER_TIMEOUT_MS = 8_000L
     }
 }

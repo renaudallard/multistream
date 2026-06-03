@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -32,6 +34,8 @@ import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.TitleKey
 import it.allard.multistream.di.LocalAppGraph
 import it.allard.multistream.ui.appViewModel
+import it.allard.multistream.ui.components.PosterImage
+import it.allard.multistream.ui.components.ProviderBadge
 
 @Composable
 fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
@@ -63,16 +67,27 @@ fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
             state.loading -> CircularProgressIndicator()
             title == null -> Text("Title not found.")
             else -> {
-                Text(title.primaryTitle, style = MaterialTheme.typography.headlineSmall)
-                Text(
-                    buildString {
-                        title.year?.let { append(it).append(" · ") }
-                        append(title.type.name.lowercase().replaceFirstChar { it.uppercase() })
-                        state.status?.let { append(" · ").append(it.name.lowercase()) }
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Row {
+                    PosterImage(title.posterUrl, Modifier.size(width = 100.dp, height = 150.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(title.primaryTitle, style = MaterialTheme.typography.headlineSmall)
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            buildString {
+                                title.year?.let { append(it).append(" · ") }
+                                append(title.type.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() })
+                                state.status?.let { append(" · ").append(it.name.lowercase()) }
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            title.availabilities.forEach { ProviderBadge(it.provider.name) }
+                        }
+                    }
+                }
                 title.synopsis?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
 
                 TextButton(onClick = viewModel::toggleWatchlist) {

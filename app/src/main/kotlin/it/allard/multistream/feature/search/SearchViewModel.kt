@@ -7,6 +7,7 @@ import it.allard.multistream.di.ProviderRegistry
 import it.allard.multistream.domain.SearchInteractor
 import it.allard.multistream.launch.LaunchController
 import it.allard.multistream.provider.api.StreamingProvider
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,16 +32,20 @@ class SearchViewModel(
     private val _state = MutableStateFlow(UiState())
     val state: StateFlow<UiState> = _state.asStateFlow()
 
+    private var searchJob: Job? = null
+
     fun onQueryChange(query: String) = _state.update { it.copy(query = query) }
 
     fun submit() {
         val query = _state.value.query.trim()
         if (query.isEmpty()) return
-        viewModelScope.launch {
-            _state.update { it.copy(loading = true) }
-            val results = interactor.search(query)
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
             val degrade = registry.enabled().filter { !it.capabilities.canSearch }
-            _state.update { it.copy(loading = false, searched = true, results = results, degrade = degrade) }
+            _state.update { it.copy(loading = true, searched = true, results = emptyList(), degrade = degrade) }
+            interactor.search(query).collect { update ->
+                _state.update { it.copy(loading = update.loading, results = update.results) }
+            }
         }
     }
 
