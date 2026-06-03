@@ -9,6 +9,7 @@ import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody.Companion.toResponseBody
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -47,6 +48,18 @@ class InMemoryCookieJar : CookieJar {
     fun clear() = store.clear()
 }
 
-/** Execute a call off the main thread. */
+/**
+ * Execute a call and fully read its body, all on the IO dispatcher. The body is returned
+ * buffered in memory so callers can read it (body.string()) on any thread. execute() alone
+ * only reads the headers; a lazy body.string() back on the main thread reads from the socket
+ * and throws NetworkOnMainThreadException for any response too large to fit the buffer
+ * execute() already filled (e.g. a large gzipped HTML page).
+ */
 suspend fun OkHttpClient.await(request: Request): Response =
-    withContext(Dispatchers.IO) { newCall(request).execute() }
+    withContext(Dispatchers.IO) {
+        newCall(request).execute().use { response ->
+            val type = response.body?.contentType()
+            val bytes = response.body?.bytes() ?: ByteArray(0)
+            response.newBuilder().body(bytes.toResponseBody(type)).build()
+        }
+    }
