@@ -29,12 +29,12 @@ fun normalizeTitle(raw: String): String {
     return if (first in ARTICLES) collapsed.substring(sep + 1) else collapsed
 }
 
-/** Authoritative key from external ids when present, else a normalized title+year heuristic. */
-fun titleKeyFor(title: String, year: Int?, externalIds: ExternalIds): TitleKey {
+/** Authoritative key from external ids when present, else a normalized type+title+year heuristic. */
+fun titleKeyFor(title: String, year: Int?, externalIds: ExternalIds, type: MediaType): TitleKey {
     externalIds.imdb?.let { return TitleKey.External("imdb", it) }
     externalIds.tmdbTv?.let { return TitleKey.External("tmdbtv", it.toString()) }
     externalIds.tmdbMovie?.let { return TitleKey.External("tmdbmovie", it.toString()) }
-    return TitleKey.Heuristic(normalizeTitle(title), year)
+    return TitleKey.Heuristic(type, normalizeTitle(title), year)
 }
 
 private fun priorityIndex(p: ProviderId, priority: List<ProviderId>): Int =
@@ -61,7 +61,7 @@ fun mergeResults(
     val byExternal = LinkedHashMap<String, MutableList<UnifiedSearchResult>>()
     val heuristic = mutableListOf<UnifiedSearchResult>()
     for (r in results) {
-        when (val k = titleKeyFor(r.title, r.year, r.externalIds)) {
+        when (val k = titleKeyFor(r.title, r.year, r.externalIds, r.type)) {
             is TitleKey.External -> byExternal.getOrPut(k.serialize()) { mutableListOf() }.add(r)
             is TitleKey.Heuristic -> heuristic.add(r)
         }
@@ -95,7 +95,7 @@ private fun toTitle(members: List<UnifiedSearchResult>, priority: List<ProviderI
     val primary = ordered.first()
     val year = ordered.firstNotNullOfOrNull { it.year }
     val external = mergeExternalIds(members)
-    val key = titleKeyFor(primary.title, year, external)
+    val key = titleKeyFor(primary.title, year, external, primary.type)
     val availabilities = members
         .map { Availability(it.provider, it.ref, it.availabilityType, it.ref.region) }
         .distinctBy { it.provider }

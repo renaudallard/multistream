@@ -91,7 +91,7 @@ object SampleCatalog {
             Season(number, "Season $number", (1..count).map { Episode(number, it, "Episode $it") })
         }
         return Title(
-            key = titleKeyFor(name, year, ids),
+            key = titleKeyFor(name, year, ids, MediaType.SERIES),
             primaryTitle = name,
             type = MediaType.SERIES,
             year = year,
@@ -113,7 +113,7 @@ object SampleCatalog {
         val ids = ExternalIds(imdb = imdb)
         val ref = ProviderRef(provider, providerTitleId, deepLinkHint, Region.FR)
         return Title(
-            key = titleKeyFor(name, year, ids),
+            key = titleKeyFor(name, year, ids, MediaType.MOVIE),
             primaryTitle = name,
             type = MediaType.MOVIE,
             year = year,

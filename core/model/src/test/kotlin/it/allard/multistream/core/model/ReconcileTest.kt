@@ -69,6 +69,27 @@ class ReconcileTest {
         assertEquals(2, merged.size)
     }
 
+    @Test fun movie_and_series_same_title_no_year_get_distinct_keys() {
+        // Regression: heuristic keys must include the media type, otherwise a movie and a series
+        // with the same title and no year serialize to the same key and the results list crashes
+        // with "Key ... was already used".
+        val merged = mergeResults(
+            listOf(
+                result(ProviderId.MOLOTOV, "Lucifer", null, MediaType.MOVIE),
+                result(ProviderId.NETFLIX, "Lucifer", null, MediaType.SERIES),
+            )
+        )
+        assertEquals(2, merged.size)
+        assertEquals(2, merged.map { it.key.serialize() }.distinct().size)
+    }
+
+    @Test fun heuristic_key_round_trips_through_serialize_and_parse() {
+        val noYear = TitleKey.Heuristic(MediaType.SERIES, "lucifer", null)
+        assertEquals(noYear, TitleKey.parse(noYear.serialize()))
+        val withYear = TitleKey.Heuristic(MediaType.MOVIE, "spider man no way home", 2021)
+        assertEquals(withYear, TitleKey.parse(withYear.serialize()))
+    }
+
     @Test fun external_id_match_merges_despite_title_difference() {
         val merged = mergeResults(
             listOf(
