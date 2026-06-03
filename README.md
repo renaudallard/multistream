@@ -16,7 +16,7 @@ reads those flags and degrades gracefully — a provider that cannot search stil
 There is no DI framework: a small hand-written `AppGraph` wires everything and composes the five
 providers into a registry.
 
-## Current status — M0 spine + M1 (Molotov & Zattoo search)
+## Current status — M0 spine + M1/M2 (Molotov, Zattoo, Disney+ search)
 
 | Capability | State |
 |---|---|
@@ -24,18 +24,18 @@ providers into a registry.
 | **Local** watch tracking (watched/unwatched, series next-episode, watchlist, continue-watching) | ✅ |
 | Per-provider **region** setting + **login** | ✅ |
 | Phone + Android-TV adaptive shell | ✅ (form-factor detection; TV-polished UI is later) |
-| Catalog **search** — Molotov & Zattoo | ✅ implemented (M1); needs live verification on a device with your accounts |
-| Catalog **search** — Netflix / Disney+ / Prime | ⏳ launch-only for now (later milestones) |
+| Catalog **search** — Molotov, Zattoo, Disney+ | ✅ implemented (M1–M2); needs live verification on a device with your accounts |
+| Catalog **search** — Netflix / Prime | ⏳ launch-only for now (later milestones) |
 
 A small built-in sample catalog remains so the flow is demonstrable offline; remove it once live
 search is confirmed. Search providers need login (Settings → Log in) and run only on a device with
 network — see the verification note below.
 
-Per-provider rollout (search): **Molotov, Zattoo** done (M1), then **Disney+** (bamgrid GraphQL),
-then best-effort **Netflix/Prime** (likely launch-only). See the approved plan in
-`/home/r/.claude/plans/` for the full reverse-engineering methodology.
+Per-provider rollout (search): **Molotov, Zattoo** (M1) and **Disney+** (M2) done; then best-effort
+**Netflix/Prime** (likely launch-only). See the approved plan in `/home/r/.claude/plans/` for the
+full reverse-engineering methodology.
 
-### M1 reverse-engineering notes
+### M1–M2 reverse-engineering notes
 
 - **Molotov** is now a Fubo app, but its front API is still `https://fapi.molotov.tv/`. The client
   is modeled on the maintained Home Assistant integration
@@ -44,6 +44,10 @@ then best-effort **Netflix/Prime** (likely launch-only). See the approved plan i
 - **Zattoo** is a React Native app using the classic zapi (per the Kodi `pvr.zattoo` addon):
   app token from the homepage → `session/hello` → `v2/account/login` → `v2/session`
   (`power_guide_hash`). Search filters the program guide (`power_guide`) by title.
+- **Disney+** uses the bamgrid GraphQL API (per the `pydisney` wrapper): client API key from the
+  homepage → `registerDevice` → `login` → `switchProfile` for tokens, then `GET /explore/v1.7/search`.
+  Full GraphQL query text is sent (no persisted-hash issue). PIN-protected profiles are skipped, and
+  tokens are cached/refreshed because repeated logins can trigger account blocks.
 
 ### Deep-link notes (verified from each app's manifest)
 
@@ -108,8 +112,8 @@ JVM unit tests (run anywhere):
 - `core/model` — title reconciliation/merge (year tolerance, type guard, external-id match) and the
   next-episode computation.
 - `provider/api` — the deep-link URL formats (`DeepLinks`).
-- `provider/molotov`, `provider/zattoo` — the API clients (login + search parsing) replayed against
-  OkHttp `MockWebServer` (plain HTTP, no Android runtime needed).
+- `provider/molotov`, `provider/zattoo`, `provider/disney` — the API clients (login + search parsing)
+  replayed against OkHttp `MockWebServer` (plain HTTP, no Android runtime needed).
 
 Room DAO SQL is validated at compile time by the Room KSP processor.
 
