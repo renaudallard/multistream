@@ -1,6 +1,9 @@
 package it.allard.multistream.feature.settings
 
+import android.app.Activity
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,10 +40,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import it.allard.multistream.WebLoginActivity
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.di.LocalAppGraph
 import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.StreamingProvider
+import it.allard.multistream.provider.api.WebLoginSpec
 import it.allard.multistream.ui.appViewModel
 import kotlinx.coroutines.launch
 
@@ -93,7 +98,9 @@ fun SettingsScreen() {
                         Spacer(Modifier.height(4.dp))
                         LoginSection(
                             isLoggedIn = loggedIn[row.provider.id] == true,
+                            webLoginSpec = row.provider.webLoginSpec(),
                             onLogin = { email, password -> viewModel.login(row.provider, email, password) },
+                            onWebCookies = { cookies -> viewModel.loginWithCookies(row.provider, cookies) },
                             onLogout = { viewModel.logout(row.provider) },
                         )
                     }
@@ -116,11 +123,42 @@ fun SettingsScreen() {
 }
 
 @Composable
-private fun LoginSection(isLoggedIn: Boolean, onLogin: (String, String) -> Unit, onLogout: () -> Unit) {
+private fun LoginSection(
+    isLoggedIn: Boolean,
+    webLoginSpec: WebLoginSpec?,
+    onLogin: (String, String) -> Unit,
+    onWebCookies: (String) -> Unit,
+    onLogout: () -> Unit,
+) {
     if (isLoggedIn) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Text("Logged in ✓", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = onLogout) { Text("Log out") }
+        }
+        return
+    }
+    if (webLoginSpec != null) {
+        val context = LocalContext.current
+        val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode == Activity.RESULT_OK) {
+                result.data?.getStringExtra(WebLoginActivity.EXTRA_RESULT_COOKIES)
+                    ?.takeIf { it.isNotBlank() }
+                    ?.let(onWebCookies)
+            }
+        }
+        Button(
+            onClick = {
+                launcher.launch(
+                    WebLoginActivity.intent(
+                        context,
+                        webLoginSpec.loginUrl,
+                        webLoginSpec.cookieUrl,
+                        webLoginSpec.successCookie,
+                    ),
+                )
+            },
+        ) {
+            Text("Log in (browser)")
         }
         return
     }

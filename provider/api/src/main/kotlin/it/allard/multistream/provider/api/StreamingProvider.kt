@@ -33,6 +33,12 @@ interface StreamingProvider {
      */
     suspend fun login(username: String, password: String): ProviderSecrets? = null
 
+    /** If non-null, this provider logs in via a WebView that captures cookies (no password form). */
+    fun webLoginSpec(): WebLoginSpec? = null
+
+    /** Complete a WebView login with the captured cookie header; returns secrets to persist. */
+    suspend fun loginWithCookies(cookies: String): ProviderSecrets? = null
+
     /** Catalog search. Only called when [ProviderCapabilities.canSearch] is true. */
     suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> = emptyList()
 

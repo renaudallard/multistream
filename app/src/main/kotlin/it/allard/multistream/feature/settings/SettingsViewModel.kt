@@ -70,6 +70,21 @@ class SettingsViewModel(
         }
     }
 
+    fun loginWithCookies(provider: StreamingProvider, cookies: String) {
+        viewModelScope.launch {
+            val result = runCatching {
+                val secret = provider.loginWithCookies(cookies) ?: error("WebView login not supported")
+                secrets.write(provider.id, secret)
+            }
+            if (result.isSuccess) {
+                _loggedIn.update { it + (provider.id to true) }
+                _message.value = "${provider.displayName}: logged in"
+            } else {
+                _message.value = "${provider.displayName}: ${result.exceptionOrNull()?.message ?: "login failed"}"
+            }
+        }
+    }
+
     fun logout(provider: StreamingProvider) {
         secrets.clear(provider.id)
         _loggedIn.update { it + (provider.id to false) }

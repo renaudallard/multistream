@@ -5,23 +5,64 @@ import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
+import it.allard.multistream.core.model.ProviderSecrets
+import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.DeepLinks
 import it.allard.multistream.provider.api.Launcher
 import it.allard.multistream.provider.api.ProviderCapabilities
+import it.allard.multistream.provider.api.ProviderConfig
+import it.allard.multistream.provider.api.SessionState
 import it.allard.multistream.provider.api.StreamingProvider
+import it.allard.multistream.provider.api.WebLoginSpec
 
 /**
- * Netflix. Catalog search is behind MSL/Shakti and not attempted in v1, so this is launch + local
- * tracking only. Title deep links and an in-app search deep link are supported.
+ * Netflix. The app API is MSL-locked, so search uses the web Shakti API with cookies captured by a
+ * WebView login. Title deep links and in-app search deep links work regardless.
  */
-class NetflixProvider : StreamingProvider {
+class NetflixProvider(
+    private val api: NetflixApi = NetflixApi(),
+) : StreamingProvider {
     override val id = ProviderId.NETFLIX
     override val displayName = "Netflix"
     override val packageName = "com.netflix.mediaclient"
     override val capabilities = ProviderCapabilities(
+        canSearch = true,
         canDeepLinkToTitle = true,
         canInAppSearchDeepLink = true,
+        requiresAuth = true,
     )
+
+    @Volatile
+    private var cookies: String? = null
+
+    override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
+        loginUrl = "https://www.netflix.com/login",
+        cookieUrl = "https://www.netflix.com",
+        successCookie = "NetflixId",
+    )
+
+    override suspend fun loginWithCookies(cookies: String): ProviderSecrets {
+        this.cookies = cookies
+        api.invalidate()
+        return ProviderSecrets(cookie = cookies)
+    }
+
+    override suspend fun ensureSession(config: ProviderConfig): SessionState {
+        if (cookies == null) cookies = config.secrets.cookie
+        return if (cookies != null) SessionState.Ready else SessionState.NeedsLogin("Netflix login required")
+    }
+
+    override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        val cookie = cookies ?: return emptyList()
+        return try {
+            api.search(query, cookie, region)
+        } catch (e: NetflixApiException) {
+            if (e.authError) api.invalidate()
+            emptyList()
+        }
+    }
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
         val titleId = ref.providerTitleId
