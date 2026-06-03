@@ -38,7 +38,9 @@ class PrimeVideoProvider(
     override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
         loginUrl = "https://www.primevideo.com",
         cookieUrl = "https://www.primevideo.com",
-        successCookie = "at-main",
+        // Amazon's access-token cookie is region suffixed (at-main-av, at-acbde, ...); match the
+        // prefix. It is set only once signed in, so it never triggers on an anonymous session.
+        successCookie = "at-",
     )
 
     override suspend fun loginWithCookies(cookies: String): ProviderSecrets {
