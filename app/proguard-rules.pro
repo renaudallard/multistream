@@ -18,7 +18,12 @@
 # Enums are persisted by name (enum.name <-> valueOf); keep them un-renamed.
 -keep enum it.allard.multistream.** { *; }
 
-# Tink (via androidx.security-crypto) references compile-only errorprone annotations.
+# androidx.security EncryptedSharedPreferences -> Tink registers its key managers and parsers
+# reflectively; R8 strips/renames them and the app crashes at launch (in SecretStore, eagerly built
+# in Application.onCreate). Keep Tink + security-crypto intact.
+-keep class androidx.security.crypto.** { *; }
+-keep class com.google.crypto.tink.** { *; }
+-dontwarn com.google.crypto.tink.**
 -dontwarn com.google.errorprone.annotations.**
 
 # Networking stacks normally ship their own consumer rules; silence optional refs.
