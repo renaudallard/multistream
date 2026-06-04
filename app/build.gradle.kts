@@ -83,6 +83,7 @@ dependencies {
     implementation(project(":provider:plex"))
     implementation(project(":provider:rtbf"))
     implementation(project(":provider:rtl"))
+    implementation(project(":provider:rts"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

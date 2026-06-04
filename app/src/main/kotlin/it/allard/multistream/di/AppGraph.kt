@@ -19,6 +19,7 @@ import it.allard.multistream.provider.plex.PlexProvider
 import it.allard.multistream.provider.prime.PrimeVideoProvider
 import it.allard.multistream.provider.rtbf.RtbfProvider
 import it.allard.multistream.provider.rtl.RtlProvider
+import it.allard.multistream.provider.rts.RtsProvider
 import it.allard.multistream.provider.zattoo.ZattooProvider
 
 /**
@@ -46,6 +47,7 @@ class AppGraph(context: Context) {
             PlexProvider(),
             RtbfProvider(),
             RtlProvider(),
+            RtsProvider(),
         )
     }
 
