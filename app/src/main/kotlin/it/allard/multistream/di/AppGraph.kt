@@ -11,10 +11,14 @@ import it.allard.multistream.core.data.db.MultistreamDatabase
 import it.allard.multistream.domain.SearchInteractor
 import it.allard.multistream.launch.LaunchController
 import it.allard.multistream.provider.api.StreamingProvider
+import it.allard.multistream.provider.arte.ArteProvider
 import it.allard.multistream.provider.disney.DisneyProvider
 import it.allard.multistream.provider.molotov.MolotovProvider
 import it.allard.multistream.provider.netflix.NetflixProvider
+import it.allard.multistream.provider.plex.PlexProvider
 import it.allard.multistream.provider.prime.PrimeVideoProvider
+import it.allard.multistream.provider.rtbf.RtbfProvider
+import it.allard.multistream.provider.rtl.RtlProvider
 import it.allard.multistream.provider.zattoo.ZattooProvider
 
 /**
@@ -38,6 +42,10 @@ class AppGraph(context: Context) {
             PrimeVideoProvider(),
             MolotovProvider(),
             ZattooProvider(),
+            ArteProvider(),
+            PlexProvider(),
+            RtbfProvider(),
+            RtlProvider(),
         )
     }
 

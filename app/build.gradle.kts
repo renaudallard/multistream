@@ -79,6 +79,10 @@ dependencies {
     implementation(project(":provider:prime"))
     implementation(project(":provider:molotov"))
     implementation(project(":provider:zattoo"))
+    implementation(project(":provider:arte"))
+    implementation(project(":provider:plex"))
+    implementation(project(":provider:rtbf"))
+    implementation(project(":provider:rtl"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

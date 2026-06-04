@@ -15,6 +15,10 @@
         <package android:name="com.amazon.avod.thirdpartyclient" />
         <package android:name="tv.molotov.app" />
         <package android:name="com.zattoo.player" />
+        <package android:name="tv.arte.plus7" />
+        <package android:name="com.plexapp.android" />
+        <package android:name="be.rtbf.auvio" />
+        <package android:name="com.tapptic.rtl.tvi" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />

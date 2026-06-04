@@ -3,7 +3,7 @@ package it.allard.multistream.core.model
 import kotlinx.serialization.Serializable
 
 /** The five services this app federates. */
-enum class ProviderId { NETFLIX, DISNEY, PRIME, MOLOTOV, ZATTOO }
+enum class ProviderId { NETFLIX, DISNEY, PRIME, MOLOTOV, ZATTOO, ARTE, PLEX, RTBF, RTL }
 
 enum class MediaType { MOVIE, SERIES, EPISODE, LIVE_CHANNEL, LIVE_PROGRAM }
 

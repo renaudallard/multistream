@@ -7,7 +7,8 @@ several installed streaming apps: search across them, see show information, **la
 the right app at the right title, and track **locally** what you have watched and where you are in a
 series.
 
-The five services: **Netflix**, **Disney+**, **Prime Video**, **Molotov**, **Zattoo**.
+The nine services: **Netflix**, **Disney+**, **Prime Video**, **Molotov**, **Zattoo**, **Arte**,
+**Plex**, **RTBF Auvio**, **RTL Play**.
 
 ## Design in one paragraph
 
@@ -15,19 +16,22 @@ Launch + local watch-tracking is the always-works spine; catalog search is a bes
 provider capability layered on top. Each provider is a self-contained leaf module that advertises
 `ProviderCapabilities` (can it search? deep-link a title? an episode? is it live TV?), and the UI
 reads those flags and degrades gracefully — a provider that cannot search still launches and tracks.
-There is no DI framework: a small hand-written `AppGraph` wires everything and composes the five
+There is no DI framework: a small hand-written `AppGraph` wires everything and composes the
 providers into a registry.
 
 ## Current status
 
 | Capability | State |
 |---|---|
-| Deep-link **launch** into all 5 apps | ✅ (title page; Zattoo opens the app, see notes) |
+| Deep-link **launch** into all 9 apps | ✅ (title page; Zattoo/RTL open the app, see notes) |
 | **Local** watch tracking (watched/unwatched, series next-episode, watchlist, continue-watching) | ✅ series episode lists come from Disney+ / Netflix detail |
 | Per-provider **region** setting + **login** | ✅ |
 | Phone + Android-TV adaptive shell | ✅ form-factor detection; poster art (Coil), incremental search, results badged by service with LIVE/REPLAY labels (TV-optimized leanback UI still later) |
 | Catalog **search** — Molotov, Zattoo, Disney+ | ✅ implemented; needs live verification on a device with your accounts |
 | Catalog **search** — Netflix, Prime | ✅ web search via WebView login; Netflix verified on a real device (the WebView session can be invalidated by heavy use and need a fresh login), Prime best-effort/unverified |
+| Catalog **search** — Arte, RTBF Auvio | ✅ free public APIs, no login (Arte selects the catalog by language) |
+| Catalog **search** — Plex | ✅ Plex Discover; email/password login adds the member's watch options |
+| **Launch + tracking** — RTL Play | ✅ launch + in-app-search only — its catalog API is geo-locked to Belgium and token-gated, so search is not reverse-engineered |
 
 A small built-in sample catalog remains so the flow is demonstrable offline; remove it once live
 search is confirmed. Search providers need login (Settings → Log in) and run only on a device with
