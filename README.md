@@ -1,88 +1,150 @@
-![multistream — one app, every catalog](docs/banner.png)
+<p align="center">
+  <img src="docs/banner.png" alt="multistream: one app, every catalog">
+</p>
 
-# multistream
+<h1 align="center">multistream</h1>
 
-One Android app (phone/tablet **and** Android TV / Google TV) that federates the catalogs of
-several installed streaming apps: search across them, see show information, **launch directly** into
-the right app at the right title, and track **locally** what you have watched and where you are in a
-series.
+<p align="center">
+  One Android app (phone, tablet, <b>and</b> Android TV / Google TV) that federates the catalogs of
+  your installed streaming apps.
+</p>
 
-The nine services: **Netflix**, **Disney+**, **Prime Video**, **Molotov**, **Zattoo**, **Arte**,
-**Plex**, **RTBF Auvio**, **RTL Play**.
+<p align="center">
+  <img src="https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin 2.0.21">
+  <img src="https://img.shields.io/badge/Android-phone%20%C2%B7%20tablet%20%C2%B7%20TV-3DDC84?logo=android&logoColor=white" alt="Android phone, tablet, TV">
+  <img src="https://img.shields.io/badge/minSdk-24-2C3E50" alt="minSdk 24">
+  <img src="https://img.shields.io/badge/Jetpack%20Compose-%26%20Compose%20for%20TV-4285F4?logo=jetpackcompose&logoColor=white" alt="Jetpack Compose and Compose for TV">
+</p>
 
-## Design in one paragraph
+Search across the services from one box, see show information, **launch directly** into the right
+app at the right title, and track **locally** what you have watched and where you are in a series.
 
-Launch + local watch-tracking is the always-works spine; catalog search is a best-effort, per-
-provider capability layered on top. Each provider is a self-contained leaf module that advertises
-`ProviderCapabilities` (can it search? deep-link a title? an episode? is it live TV?), and the UI
-reads those flags and degrades gracefully — a provider that cannot search still launches and tracks.
-There is no DI framework: a small hand-written `AppGraph` wires everything and composes the
-providers into a registry.
+The ten services: **Netflix**, **Disney+**, **Prime Video**, **Molotov**, **Zattoo**, **Arte**,
+**Plex**, **RTBF Auvio**, **RTL Play**, **Play RTS**.
 
-## Current status
+## Contents
 
-| Capability | State |
-|---|---|
-| Deep-link **launch** into all 9 apps | ✅ (title page; Zattoo/RTL open the app, see notes) |
-| **Local** watch tracking (watched/unwatched, series next-episode, watchlist, continue-watching) | ✅ series episode lists come from Disney+ / Netflix detail |
-| Per-provider **region** setting + **login** | ✅ |
-| Phone + Android-TV adaptive shell | ✅ form-factor detection; poster art (Coil), incremental search, results badged by service with LIVE/REPLAY labels (TV-optimized leanback UI still later) |
-| Catalog **search** — Molotov, Zattoo, Disney+ | ✅ implemented; needs live verification on a device with your accounts |
-| Catalog **search** — Netflix, Prime | ✅ web search via WebView login; Netflix verified on a real device (the WebView session can be invalidated by heavy use and need a fresh login), Prime best-effort/unverified |
-| Catalog **search** — Arte, RTBF Auvio | ✅ free public APIs, no login (Arte selects the catalog by language) |
-| Catalog **search** — Plex | ✅ Plex Discover; email/password login adds the member's watch options |
-| **Launch + tracking** — RTL Play | ✅ launch + in-app-search only — its catalog API is geo-locked to Belgium and token-gated, so search is not reverse-engineered |
+- [How it works](#how-it-works)
+- [Services and capabilities](#services-and-capabilities)
+- [Login](#login)
+- [Deep links](#deep-links)
+- [Modules](#modules)
+- [Build and run](#build-and-run)
+- [Testing and verification](#testing-and-verification)
+- [Legal / personal use](#legal--personal-use)
 
-A small built-in sample catalog remains so the flow is demonstrable offline; remove it once live
-search is confirmed. Search providers need login (Settings → Log in) and run only on a device with
-network — see the verification note below.
+## How it works
 
-Netflix and Prime authenticate with a one-time **WebView login** (Settings → "Log in (browser)") that
-captures cookies into the encrypted secret store; the other three use an email/password form.
+Launch plus local watch-tracking is the always-works spine; catalog search is a best-effort,
+per-provider capability layered on top. Each provider is a self-contained leaf module that
+advertises `ProviderCapabilities` (can it search? deep-link a title? an episode? is it live TV?),
+and the UI reads those flags and degrades gracefully: a provider that cannot search still launches
+and tracks. There is no DI framework. A small hand-written `AppGraph` wires everything and composes
+the providers into a registry, so one flaky provider never breaks the app. Search fans out to every
+enabled provider in parallel, merges the rows into one card per title across services, and ranks the
+list by how closely each title matches the query (a full-phrase match before partial-word ones).
 
-### Deep-link notes (verified from each app's manifest)
+## Services and capabilities
 
-- **Netflix** `https://www.netflix.com/title/<id>` (+ `nflx://`), plus an in-app search deep link.
-- **Disney+** `https://www.disneyplus.com/...` (auto-verified app links).
-- **Prime** `https://app.primevideo.com/detail?gti=<ASIN>`. The bundled APK is the TV
+The spine works for **all ten**: deep-link launch, local watch tracking (watched/unwatched,
+series next-episode, watchlist, continue-watching), a per-provider region setting, and one adaptive
+shell for phone and Android TV.
+
+| Service | Search | Launch | Login | Notes |
+|---|:--:|:--:|:--:|---|
+| **Netflix** | ✅ | title page | WebView \* | title and in-app-search deep links; search verified on a real device, the session can need a fresh login after heavy use |
+| **Disney+** | ✅ | title page | email / password | needs live verification with your account |
+| **Prime Video** | ✅ | detail page | WebView \* | best-effort and unverified; TV build is bundled, the mobile package is tried on phones |
+| **Molotov** | ✅ | deep link | email / password | rich title and program deep links; needs live verification |
+| **Zattoo** | ✅ | opens app | email / password | the manifest carries no title path yet, so launch opens the app |
+| **Arte** | ✅ | title page | optional | free public API; the region selects the catalog language |
+| **Plex** | ✅ | watch.plex.tv | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
+| **RTBF Auvio** | ✅ | title page | optional | free public API |
+| **RTL Play** | opens app | opens app | optional | catalog API is JWT-gated and geo-locked, so search runs inside the app |
+| **Play RTS** | ✅ | video page | optional | free SRG SSR Integration Layer; video results only |
+
+`✅ Search` = a real catalog query from this app. `\*` = login is required for that provider's
+search. Everything else searches without a login.
+
+A small built-in sample catalog ships so the flow is demonstrable offline; remove it once live
+search is confirmed. Search runs only on a device with network.
+
+## Login
+
+Login is per-provider and never required for search except where noted above.
+
+- **Netflix, Prime Video** open a one-time **WebView login** (Settings, "Log in (browser)") that
+  captures cookies into the encrypted secret store. Their search needs it.
+- **Disney+, Molotov, Zattoo** use an email and password form.
+- **Plex** searches anonymously. The **optional** login is Plex's device sign-in (so it works with
+  two-factor accounts): tap "Link account", approve in the browser at `app.plex.tv/auth` where any
+  2FA is handled, and the app keeps the account token and auto-discovers your own Plex Media Server
+  (no token to paste), searching that server with a Discover fallback.
+- **Arte, RTBF Auvio** search without login. An **optional** WebView login captures the site session
+  and passes it to the search best-effort.
+- **RTL Play** is launch-only. The **optional** login opens RTL's account SSO (`sso.rtl.be`). Because
+  the catalog API is JWT-gated and geo-locked, that session does not drive search.
+- **Play RTS** searches without login (its SRG SSR Integration Layer catalog is public); an
+  **optional** WebView login captures your rts.ch account session and passes it to the search
+  best-effort.
+
+Secrets live in `EncryptedSharedPreferences`; clearing the app data or logging out wipes them.
+
+## Deep links
+
+Verified from each app's decoded manifest. Playback activities are never forced; multistream opens
+the **title page** and the user presses play inside the official app.
+
+- **Netflix** `https://www.netflix.com/title/<id>` (plus the `nflx://` scheme) and an in-app search
+  deep link.
+- **Disney+** `https://www.disneyplus.com/...` auto-verified app links.
+- **Prime Video** `https://app.primevideo.com/detail?gti=<ASIN>`. The bundled APK is the TV
   ("living-room") build; on phones the mobile package `com.amazon.avod.thirdpartyclient` is tried.
-- **Molotov** `molotov://` / `app.molotov.tv` app links (carried as a deep-link hint).
-- **Zattoo** the manifest exposes only `zattoo://zattoo.com` with no title path, so v1 opens the app
-  (search still works once wired); title-level deep links are deferred until reverse-engineered.
+- **Molotov** `molotov://` and `app.molotov.tv` app links, carried as a deep-link hint.
+- **Zattoo** the manifest exposes only `zattoo://zattoo.com` with no title path, so launch opens the
+  app; title-level deep links are deferred until reverse-engineered.
+- **Arte** `https://www.arte.tv/<lang>/videos/<id>/`, with `arte://collection/<id>` as a fallback.
+- **Plex** `https://watch.plex.tv/<movie|show>/<slug>` for Discover hits; server-library hits have no
+  public slug and open the Plex app.
+- **RTBF Auvio** `https://auvio.rtbf.be<path>`.
+- **RTL Play** opens the app (no public title path; the catalog is geo-locked).
+- **Play RTS** `https://www.rts.ch/play/tv/redirect/detail/<id>` (the numeric id from the media URN).
 
 ## Modules
 
 ```
-app                     UI (Compose + Compose-for-TV), nav, hand-written AppGraph, sample catalog
-core/model              pure Kotlin: Title/Season/Episode/Availability/ProviderRef/TitleKey,
-                        normalizeTitle(), mergeResults(), computeNextEpisode()
-core/data               Room (tracking + disposable cache), DataStore settings, encrypted secrets
-provider/api            StreamingProvider interface, ProviderCapabilities, Launcher, DeepLinks
-provider/{netflix,disney,prime,molotov,zattoo}   one leaf module per service
+app                  UI (Compose + Compose for TV), navigation, hand-written AppGraph, sample catalog
+core/model           pure Kotlin: Title/Season/Episode/Availability/ProviderRef/TitleKey,
+                     normalizeTitle(), mergeResults(), computeNextEpisode()
+core/data            Room (tracking + disposable cache), DataStore settings, encrypted secrets
+core/net             shared OkHttp client, tolerant JSON helpers, in-memory cookie jar
+provider/api         StreamingProvider interface, ProviderCapabilities, Launcher, DeepLinks, WebLoginSpec
+provider/<service>   one leaf module per service:
+                     netflix · disney · prime · molotov · zattoo · arte · plex · rtbf · rtl · rts
 ```
 
-`feature/*` and `core/*` never depend on a concrete provider — only `app` wires them, so a flaky
-provider stays contained.
+`core/*` and the feature screens never depend on a concrete provider; only `app` wires them, so a
+flaky provider stays contained.
 
-## Build & run
+## Build and run
 
 Prerequisites on this machine: **JDK 21** (`/usr/lib/jvm/java-21-openjdk-arm64`) and the **Android
-SDK** at `~/Android/Sdk` (platform `android-35`, build-tools 35). The system `gradle` is too old —
-always use the wrapper.
+SDK** at `~/Android/Sdk` (platform `android-35`, build-tools 35). The system `gradle` is too old, so
+always use the wrapper. Toolchain: Kotlin 2.0.21, AGP 8.7.2, `compileSdk`/`targetSdk` 35, `minSdk` 24.
 
 ```bash
 export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-arm64
-./gradlew assembleDebug      # builds app/build/outputs/apk/debug/multistream-debug.apk
+./gradlew assembleDebug      # -> app/build/outputs/apk/debug/multistream-debug.apk
 ./gradlew test               # runs the JVM unit tests
 ./gradlew installDebug       # installs to a connected device/emulator (adb)
 ```
 
-Release build (signed + R8-shrunk):
+Release build (signed and R8-shrunk):
 
 ```bash
 # Signing creds live in keystore.properties (git-ignored): storeFile, storePassword, keyAlias, keyPassword.
 # A dev key (multistream-release.keystore) is used by default; swap in your own for Play distribution.
-./gradlew :app:assembleRelease   # -> app/build/outputs/apk/release/multistream.apk  (~2.3 MB, v2-signed)
+./gradlew :app:assembleRelease   # -> app/build/outputs/apk/release/multistream.apk (~2.4 MB, v2-signed)
 ./gradlew :app:bundleRelease     # -> app/build/outputs/bundle/release/multistream-release.aab (Play upload)
 ```
 
@@ -105,25 +167,25 @@ Verify a deep link directly:
 adb shell am start -a android.intent.action.VIEW -d "https://www.netflix.com/title/80057281" com.netflix.mediaclient
 ```
 
-## Testing & verification
+## Testing and verification
 
 JVM unit tests (run anywhere):
 
-- `core/model` — title reconciliation/merge (year tolerance, type guard, external-id match) and the
-  next-episode computation.
-- `provider/api` — the deep-link URL formats (`DeepLinks`).
-- `provider/{molotov,zattoo,disney,netflix,prime}` — the API clients (login/session + search parsing)
-  replayed against OkHttp `MockWebServer` (plain HTTP, no Android runtime needed).
+- `core/model` covers title reconciliation and merge (year tolerance, type guard, external-id match)
+  and the next-episode computation.
+- `provider/api` covers the deep-link URL formats (`DeepLinks`).
+- Each searchable provider (`netflix`, `disney`, `prime`, `molotov`, `zattoo`, `arte`, `plex`,
+  `rtbf`, `rts`) replays its API client against OkHttp `MockWebServer` (plain HTTP, no Android runtime).
 
 Room DAO SQL is validated at compile time by the Room KSP processor.
 
 **Environment limitation (this host):** it is headless **aarch64 with no `/dev/kvm`**, so the Android
 emulator cannot run, and Robolectric cannot run either (Conscrypt ships no `linux-aarch_64` native).
-Android-runtime tests (Room integration, intent resolution) and on-device runs must therefore be done
+Android-runtime tests (Room integration, intent resolution) and on-device runs must therefore happen
 on an **x86_64 machine, a KVM-enabled host, or a physical device** over `adb`. Everything that does
-not need an Android runtime is verified here (build to a working APK + the JVM tests above).
+not need an Android runtime is verified here: a working APK plus the JVM tests above.
 
 ## Legal / personal use
 
-For personal use with your own accounts. The app never bypasses DRM — playback always happens inside the official app;
-multistream only queries catalogs and fires a deep-link intent.
+For personal use with your own accounts. The app never bypasses DRM: playback always happens inside
+the official app. multistream only queries catalogs and fires a deep-link intent.
