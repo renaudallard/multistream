@@ -143,14 +143,7 @@ Android-runtime tests (Room integration, intent resolution) and on-device runs m
 on an **x86_64 machine, a KVM-enabled host, or a physical device** over `adb`. Everything that does
 not need an Android runtime is verified here (build to a working APK + the JVM tests above).
 
-## Reverse-engineering inputs
-
-`tmp/` (git-ignored) holds the decompiled manifests and extracted inner APKs used to verify deep
-links and, in later milestones, the catalog APIs. `jadx` and `mitmproxy` are installed on demand when
-the search milestones begin.
-
 ## Legal / personal use
 
-For personal use with your own accounts. Reverse-engineering these services' private APIs may violate
-their terms of service. The app never bypasses DRM — playback always happens inside the official app;
+For personal use with your own accounts. The app never bypasses DRM — playback always happens inside the official app;
 multistream only queries catalogs and fires a deep-link intent.
