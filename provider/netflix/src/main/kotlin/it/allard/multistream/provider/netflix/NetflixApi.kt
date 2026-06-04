@@ -3,11 +3,11 @@ package it.allard.multistream.provider.netflix
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
+import it.allard.multistream.core.model.normalizeTitle
 import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.await
 import it.allard.multistream.core.net.buildClient
 import it.allard.multistream.core.net.obj
-import it.allard.multistream.core.net.string
 import kotlinx.serialization.json.JsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -26,7 +26,7 @@ class NetflixApi(
     private val client: OkHttpClient = buildClient(),
     private val homeUrl: String = "https://www.netflix.com/browse",
 ) {
-    private data class Session(val memberApi: String, val authUrl: String)
+    private data class Session(val memberApi: String, val authUrl: String, val userGuid: String?)
 
     @Volatile
     private var session: Session? = null
@@ -38,37 +38,76 @@ class NetflixApi(
     suspend fun search(query: String, cookies: String, region: Region): List<UnifiedSearchResult> {
         val current = session ?: prepareSession(cookies).also { session = it }
         val term = query.replace("\\", "").replace("\"", "")
-        val path = "[\"search\",\"byTerm\",\"|$term\",\"titles\",{\"from\":0,\"to\":24},[\"summary\",\"title\"]]"
-        val body = "path=$path&authURL=${current.authUrl}"
+        // Search results are nested Falcor refs: titles[size][range] -> byReference -> videos. Mirror
+        // the CastagnaIT addon's two paths (the size level is required) so Netflix materializes the
+        // referenced video data instead of returning only the title refs.
+        val base = "[\"search\",\"byTerm\",\"|$term\",\"titles\",$PAGE_SIZE"
+        val idPath = "$base,[\"id\",\"name\",\"requestId\",\"trackIds\"]]"
+        val refPath = "$base,{\"from\":0,\"to\":24},\"reference\",[\"summary\",\"title\"]]"
+        val body = "path=$refPath&path=$idPath&authURL=${current.authUrl}"
         val url = "${current.memberApi}/pathEvaluator" +
-            "?drmSystem=widevine&falcor_server=0.1.0&withSize=false&materialize=false&original_path=/shakti/mre/pathEvaluator"
-        val request = Request.Builder()
+            "?drmSystem=widevine&falcor_server=0.1.0&withSize=false&materialize=false" +
+            "&routeAPIRequestsThroughFTL=false&isVolatileBillboardsEnabled=true&isTop10Supported=true" +
+            "&original_path=/shakti/mre/pathEvaluator"
+        val builder = Request.Builder()
             .url(url)
             .header("Cookie", cookies)
             .header("Accept", "*/*")
             .header("Content-Type", "application/x-www-form-urlencoded")
             .header("User-Agent", USER_AGENT)
+            .header("x-netflix.nq.stack", "prod")
             .post(body.toRequestBody(FORM_MEDIA))
-            .build()
-        val jsonGraph = exec(request)["jsonGraph"].obj() ?: return emptyList()
+        current.userGuid?.let { builder.header("x-netflix.request.client.user.guid", it) }
+        val jsonGraph = exec(builder.build())["jsonGraph"].obj() ?: return emptyList()
+        // Netflix's byTerm search pads the real match with themed suggestions; keep only titles that
+        // actually contain the query so the unified results aren't polluted.
+        val normQuery = normalizeTitle(query)
         return NetflixParser.parse(jsonGraph, region)
+            .filter { normQuery.isBlank() || normalizeTitle(it.title).contains(normQuery) }
     }
 
     private suspend fun prepareSession(cookies: String): Session {
         val request = Request.Builder().url(homeUrl).header("Cookie", cookies).header("User-Agent", USER_AGENT).get().build()
         client.await(request).use { response ->
             val html = response.body?.string().orEmpty()
-            val contextJson = REACT_CONTEXT.find(html)?.groupValues?.getOrNull(1)
+            // Pull the few values we need straight out of the reactContext rather than parsing the
+            // whole blob: Netflix escapes '/', '<', '>' as \xHH to keep them out of </script>, which
+            // is invalid JSON. The member API base is present only on a logged-in (member) page.
+            val memberApi = extractMemberApi(html)
                 ?: throw NetflixApiException("Netflix session not found (not logged in?)", authError = true)
-            val models = NetJson.parseToJsonElement(contextJson).obj()?.get("models").obj()
-                ?: throw NetflixApiException("Could not parse Netflix reactContext")
-            val memberApi = models["services"].obj()?.get("data").obj()?.get("memberapi").string()
-                ?: throw NetflixApiException("Netflix member API URL missing")
-            val authUrl = models["userInfo"].obj()?.get("data").obj()?.get("authURL").string()
+            val authUrl = extractReactValue(html, "authURL")
                 ?: throw NetflixApiException("Netflix authURL missing", authError = true)
-            return Session(memberApi, authUrl)
+            // Profile guid for the x-netflix.request.client.user.guid header (optional, best effort).
+            val userGuid = extractReactValue(html, "userGuid") ?: extractReactValue(html, "guid")
+            return Session(memberApi, authUrl, userGuid)
         }
     }
+
+    /**
+     * The member API base URL. Modern Netflix serves memberapi as an object
+     * {protocol, hostname, path[]} (nodequark); older pages used a plain string. Null = not logged in.
+     */
+    private fun extractMemberApi(html: String): String? {
+        extractReactValue(html, "memberapi")?.let { return it }
+        val start = html.indexOf("\"memberapi\"")
+        if (start < 0) return null
+        val region = html.substring(start, minOf(start + 400, html.length))
+        val protocol = extractReactValue(region, "protocol") ?: return null
+        val hostname = extractReactValue(region, "hostname") ?: return null
+        val path = Regex("\"path\"\\s*:\\s*\\[\\s*\"((?:[^\"\\\\]|\\\\.)*)\"")
+            .find(region)?.groupValues?.get(1)?.let(::decodeJsHex) ?: return null
+        return "$protocol://$hostname$path"
+    }
+
+    /** Read a "key":"value" string out of the page's reactContext, decoding Netflix's \xHH escapes. */
+    private fun extractReactValue(html: String, key: String): String? {
+        val raw = Regex("\"$key\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(html)?.groupValues?.get(1) ?: return null
+        return decodeJsHex(raw)
+    }
+
+    /** Decode Netflix's \xHH hex escapes (used in place of '/', '<', '>', '+', '=') to characters. */
+    private fun decodeJsHex(s: String): String =
+        JS_HEX_ESCAPE.replace(s) { it.groupValues[1].toInt(16).toChar().toString() }
 
     /** Seasons + episodes for a show via the clean /metadata endpoint (no Falcor needed). */
     suspend fun getSeasons(videoId: String, cookies: String): List<Season> {
@@ -97,11 +136,11 @@ class NetflixApi(
     }
 
     private companion object {
+        const val PAGE_SIZE = 47
         val FORM_MEDIA = "application/x-www-form-urlencoded".toMediaType()
         const val USER_AGENT =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
-        // Note: the closing brace must be escaped (\\}) — a literal '}' is a syntax error on
-        // Android's stricter ICU regex engine (API 34+), even though the JVM accepts it.
-        val REACT_CONTEXT = Regex("netflix\\.reactContext\\s*=\\s*(\\{.*?\\});\\s*</script>", RegexOption.DOT_MATCHES_ALL)
+        // Netflix escapes characters as \xHH inside the inline reactContext JSON; decode them.
+        val JS_HEX_ESCAPE = Regex("""\\x([0-9A-Fa-f]{2})""")
     }
 }

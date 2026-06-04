@@ -21,11 +21,26 @@ import kotlinx.serialization.json.JsonObject
  * Leaves are jsonGraph atoms: `{"$type":"atom","value":X}`.
  */
 object NetflixParser {
+    /**
+     * Resolve the ordered search matches. The result list is reached through a chain of Falcor refs:
+     * search.byTerm["|term"].titles[size] -> search.byReference[key] (a {index -> {reference -> videos[id]}}
+     * map) -> videos[id]. We must follow it rather than read the flat `videos` map, which Netflix also
+     * fills with unrelated home/billboard recommendations.
+     */
     fun parse(jsonGraph: JsonObject, region: Region): List<UnifiedSearchResult> {
         val videos = jsonGraph["videos"].obj() ?: return emptyList()
+        val search = jsonGraph["search"].obj() ?: return emptyList()
+        val byReference = search["byReference"].obj() ?: return emptyList()
+        val titlesRef = search["byTerm"].obj()?.values?.firstOrNull().obj()
+            ?.get("titles").obj()?.values?.firstOrNull().obj()
+        val listKey = titlesRef?.get("value").array()?.getOrNull(2).string() ?: return emptyList()
+        val list = byReference[listKey].obj() ?: return emptyList()
+
         val out = mutableListOf<UnifiedSearchResult>()
-        for ((id, video) in videos) {
-            val videoObj = video.obj() ?: continue
+        for ((indexKey, entry) in list.entries.sortedBy { it.key.toIntOrNull() ?: Int.MAX_VALUE }) {
+            if (indexKey.toIntOrNull() == null) continue
+            val id = entry.obj()?.get("reference").obj()?.get("value").array()?.getOrNull(1).string() ?: continue
+            val videoObj = videos[id].obj() ?: continue
             val title = atom(videoObj["title"]).string()?.takeIf { it.isNotBlank() } ?: continue
             val type = atom(videoObj["summary"]).obj()?.get("type").string()
             val media = when (type) {

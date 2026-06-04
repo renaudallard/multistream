@@ -25,7 +25,7 @@ providers into a registry.
 | Per-provider **region** setting + **login** | ✅ |
 | Phone + Android-TV adaptive shell | ✅ form-factor detection; poster art (Coil), incremental search, results badged by service with LIVE/REPLAY labels (TV-optimized leanback UI still later) |
 | Catalog **search** — Molotov, Zattoo, Disney+ | ✅ implemented (M1–M2); needs live verification on a device with your accounts |
-| Catalog **search** — Netflix, Prime | ✅ best-effort web search via WebView login (M3); Netflix is fragile, Prime the most fragile/unverified |
+| Catalog **search** — Netflix, Prime | ✅ web search via WebView login (M3); Netflix verified on a real device (the WebView session can be invalidated by heavy use and need a fresh login), Prime best-effort/unverified |
 
 A small built-in sample catalog remains so the flow is demonstrable offline; remove it once live
 search is confirmed. Search providers need login (Settings → Log in) and run only on a device with
