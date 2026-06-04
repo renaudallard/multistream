@@ -49,6 +49,11 @@ class NetflixProvider(
         loginUrl = "https://www.netflix.com/login",
         cookieUrl = "https://www.netflix.com",
         successCookie = "NetflixId",
+        // Sign out server-side first; otherwise Netflix re-auths a stale session the API rejects.
+        logoutUrl = "https://www.netflix.com/SignOut",
+        // NetflixId is set on page load (before login), so don't auto-capture: let the user sign in
+        // for real, then confirm with the button to capture an authenticated session.
+        autoCapture = false,
     )
 
     override suspend fun loginWithCookies(cookies: String): ProviderSecrets {

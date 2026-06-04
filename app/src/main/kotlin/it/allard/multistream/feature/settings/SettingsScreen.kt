@@ -154,6 +154,8 @@ private fun LoginSection(
                         webLoginSpec.loginUrl,
                         webLoginSpec.cookieUrl,
                         webLoginSpec.successCookie,
+                        webLoginSpec.logoutUrl,
+                        webLoginSpec.autoCapture,
                     ),
                 )
             },
