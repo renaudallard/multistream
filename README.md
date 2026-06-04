@@ -18,7 +18,7 @@ reads those flags and degrades gracefully — a provider that cannot search stil
 There is no DI framework: a small hand-written `AppGraph` wires everything and composes the five
 providers into a registry.
 
-## Current status — M0 spine + search for all 5 services (M1–M3)
+## Current status
 
 | Capability | State |
 |---|---|
@@ -26,38 +26,12 @@ providers into a registry.
 | **Local** watch tracking (watched/unwatched, series next-episode, watchlist, continue-watching) | ✅ series episode lists come from Disney+ / Netflix detail |
 | Per-provider **region** setting + **login** | ✅ |
 | Phone + Android-TV adaptive shell | ✅ form-factor detection; poster art (Coil), incremental search, results badged by service with LIVE/REPLAY labels (TV-optimized leanback UI still later) |
-| Catalog **search** — Molotov, Zattoo, Disney+ | ✅ implemented (M1–M2); needs live verification on a device with your accounts |
-| Catalog **search** — Netflix, Prime | ✅ web search via WebView login (M3); Netflix verified on a real device (the WebView session can be invalidated by heavy use and need a fresh login), Prime best-effort/unverified |
+| Catalog **search** — Molotov, Zattoo, Disney+ | ✅ implemented; needs live verification on a device with your accounts |
+| Catalog **search** — Netflix, Prime | ✅ web search via WebView login; Netflix verified on a real device (the WebView session can be invalidated by heavy use and need a fresh login), Prime best-effort/unverified |
 
 A small built-in sample catalog remains so the flow is demonstrable offline; remove it once live
 search is confirmed. Search providers need login (Settings → Log in) and run only on a device with
 network — see the verification note below.
-
-Per-provider rollout (search): **Molotov, Zattoo** (M1), **Disney+** (M2), and best-effort
-**Netflix/Prime** (M3) done — all five now search. See the approved plan in `/home/r/.claude/plans/`
-for the full reverse-engineering methodology.
-
-### M1–M3 reverse-engineering notes
-
-- **Molotov** is now a Fubo app, but its front API is still `https://fapi.molotov.tv/`. The client
-  is modeled on the maintained Home Assistant integration
-  (github.com/renaudallard/homeassistant_molotov_tv): `POST v3.1/auth/login` (bearer + refresh),
-  the `X-Molotov-Agent` identity header, and `POST v2/search`. Premium account required.
-- **Zattoo** is a React Native app using the classic zapi (per the Kodi `pvr.zattoo` addon):
-  app token from the homepage → `session/hello` → `v2/account/login` → `v2/session`
-  (`power_guide_hash`). Search filters the program guide (`power_guide`) by title.
-- **Disney+** uses the bamgrid GraphQL API (per the `pydisney` wrapper): client API key from the
-  homepage → `registerDevice` → `login` → `switchProfile` for tokens, then `GET /explore/v1.7/search`.
-  Full GraphQL query text is sent (no persisted-hash issue). PIN-protected profiles are skipped, and
-  tokens are cached/refreshed because repeated logins can trigger account blocks. Series episode
-  lists come from the entity page plus one call per season.
-- **Netflix** app API is MSL-encrypted, so search uses the website (Kodi CastagnaIT addon): a WebView
-  login captures cookies, the page's `reactContext` yields the member API base + authURL, a
-  `pathEvaluator` Falcor request returns the matched titles, and `/metadata` returns full
-  seasons/episodes. Fragile (BUILD_ID rotation, bot defenses).
-- **Prime Video** (most fragile, best-effort) uses the primevideo.com web search with cookies from a
-  WebView login, walking the embedded `text/template` JSON for titles (as the Kodi amazon addon's
-  GrabJSON does). Unverified; expect to adjust it against live traffic.
 
 Netflix and Prime authenticate with a one-time **WebView login** (Settings → "Log in (browser)") that
 captures cookies into the encrypted secret store; the other three use an email/password form.
