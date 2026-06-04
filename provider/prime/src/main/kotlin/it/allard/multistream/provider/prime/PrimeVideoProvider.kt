@@ -26,6 +26,8 @@ class PrimeVideoProvider(
     override val id = ProviderId.PRIME
     override val displayName = "Prime Video"
     override val packageName = "com.amazon.amazonvideo.livingroom"
+    // Phone build first (most devices), then the bundled TV "living-room" build.
+    override val launchPackages = listOf(MOBILE_PACKAGE, packageName)
     override val capabilities = ProviderCapabilities(
         canSearch = true,
         canDeepLinkToTitle = true,
