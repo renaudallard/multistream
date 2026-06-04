@@ -56,16 +56,19 @@ object LaunchResolver {
         episode: EpisodeCoord? = null,
         searchQuery: String? = null,
     ): LaunchAction {
-        val pkg = provider.packageName
-        if (!Launcher.isInstalled(context, pkg)) {
-            return LaunchAction.Install(pkg, Launcher.playStoreIntent(pkg))
+        // A provider may have several installable packages (e.g. Prime's phone vs TV build); treat it
+        // as installed if any is present, and only offer the Play Store when none is.
+        val installedPkg = provider.launchPackages.firstOrNull { Launcher.isInstalled(context, it) }
+        if (installedPkg == null) {
+            val target = provider.launchPackages.first()
+            return LaunchAction.Install(target, Launcher.playStoreIntent(target))
         }
         provider.buildLaunchIntent(context, ref, episode)?.let { return LaunchAction.Start(it) }
         if (episode != null) {
             provider.buildLaunchIntent(context, ref, null)?.let { return LaunchAction.Start(it) }
         }
         provider.launchAppFallback(context, searchQuery)?.let { return LaunchAction.Start(it) }
-        Launcher.launchApp(context, pkg)?.let { return LaunchAction.Start(it) }
+        Launcher.launchApp(context, installedPkg)?.let { return LaunchAction.Start(it) }
         return LaunchAction.Unavailable
     }
 }

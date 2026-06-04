@@ -22,6 +22,12 @@ interface StreamingProvider {
     val packageName: String
     val capabilities: ProviderCapabilities
 
+    /**
+     * Every package this provider may be installed as, most-preferred first (e.g. Prime ships a phone
+     * build and a separate TV build). Used to detect installation and pick the Play Store target.
+     */
+    val launchPackages: List<String> get() = listOf(packageName)
+
     fun supportedRegions(): Set<Region> = emptySet()
 
     /** Establish/refresh a session. No-op for open providers. */
@@ -38,6 +44,14 @@ interface StreamingProvider {
 
     /** Complete a WebView login with the captured cookie header; returns secrets to persist. */
     suspend fun loginWithCookies(cookies: String): ProviderSecrets? = null
+
+    /**
+     * Begin a device-link login (the provider shows a short code the user enters on a web page,
+     * e.g. plex.tv/link). Returns null if unsupported. The returned session carries the code to
+     * display and a suspending poll that resolves to secrets once the user has linked, or null on
+     * timeout. Used instead of a password form when [ProviderCapabilities.linkLogin] is set.
+     */
+    suspend fun beginLink(): LinkSession? = null
 
     /** Catalog search. Only called when [ProviderCapabilities.canSearch] is true. */
     suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> = emptyList()

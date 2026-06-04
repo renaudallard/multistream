@@ -1,6 +1,8 @@
 package it.allard.multistream.feature.settings
 
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -55,6 +57,7 @@ fun SettingsScreen() {
     val viewModel = appViewModel { SettingsViewModel(graph.registry, graph.settings, graph.secrets) }
     val rows by viewModel.rows.collectAsState()
     val loggedIn by viewModel.loggedIn.collectAsState()
+    val linkPrompt by viewModel.linkPrompt.collectAsState()
     val message by viewModel.message.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -94,11 +97,17 @@ fun SettingsScreen() {
                             onSelect = { viewModel.setRegion(row.provider, it) },
                         )
                     }
-                    if (row.provider.capabilities.requiresAuth) {
+                    if (row.provider.capabilities.requiresAuth || row.provider.capabilities.optionalLogin) {
                         Spacer(Modifier.height(4.dp))
                         LoginSection(
                             isLoggedIn = loggedIn[row.provider.id] == true,
                             webLoginSpec = row.provider.webLoginSpec(),
+                            userLabel = row.provider.capabilities.loginUserLabel,
+                            passLabel = row.provider.capabilities.loginPassLabel,
+                            optional = row.provider.capabilities.optionalLogin && !row.provider.capabilities.requiresAuth,
+                            linkLogin = row.provider.capabilities.linkLogin,
+                            linkPrompt = linkPrompt?.takeIf { it.providerId == row.provider.id },
+                            onStartLink = { viewModel.startLink(row.provider) },
                             onLogin = { email, password -> viewModel.login(row.provider, email, password) },
                             onWebCookies = { cookies -> viewModel.loginWithCookies(row.provider, cookies) },
                             onLogout = { viewModel.logout(row.provider) },
@@ -126,6 +135,12 @@ fun SettingsScreen() {
 private fun LoginSection(
     isLoggedIn: Boolean,
     webLoginSpec: WebLoginSpec?,
+    userLabel: String = "Email",
+    passLabel: String = "Password",
+    optional: Boolean = false,
+    linkLogin: Boolean = false,
+    linkPrompt: SettingsViewModel.LinkPrompt? = null,
+    onStartLink: () -> Unit = {},
     onLogin: (String, String) -> Unit,
     onWebCookies: (String) -> Unit,
     onLogout: () -> Unit,
@@ -134,6 +149,25 @@ private fun LoginSection(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
             Text("Logged in ✓", style = MaterialTheme.typography.bodyMedium)
             TextButton(onClick = onLogout) { Text("Log out") }
+        }
+        return
+    }
+    if (optional) {
+        Text("Optional — search works without logging in.", style = MaterialTheme.typography.labelSmall)
+        Spacer(Modifier.height(4.dp))
+    }
+    if (linkLogin) {
+        val context = LocalContext.current
+        if (linkPrompt != null) {
+            Text("Approve the sign-in in your browser, then come back here.", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(4.dp))
+            Button(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(linkPrompt.url))) }) {
+                Text("Open Plex sign-in")
+            }
+            Spacer(Modifier.height(4.dp))
+            Text("Waiting for you to approve…", style = MaterialTheme.typography.labelSmall)
+        } else {
+            Button(onClick = onStartLink) { Text("Link account") }
         }
         return
     }
@@ -169,7 +203,7 @@ private fun LoginSection(
     OutlinedTextField(
         value = email,
         onValueChange = { email = it },
-        label = { Text("Email") },
+        label = { Text(userLabel) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
         modifier = Modifier.fillMaxWidth(),
@@ -178,7 +212,7 @@ private fun LoginSection(
     OutlinedTextField(
         value = password,
         onValueChange = { password = it },
-        label = { Text("Password") },
+        label = { Text(passLabel) },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
@@ -193,6 +227,7 @@ private fun capabilitySummary(capabilities: ProviderCapabilities): String = buil
     if (capabilities.canDeepLinkToTitle) add("Deep link")
     if (capabilities.isLiveTv) add("Live TV")
     if (capabilities.requiresAuth) add("Login")
+    if (capabilities.optionalLogin) add("Login optional")
 }.joinToString(" · ")
 
 private fun regionOptions(provider: StreamingProvider): List<Region> {

@@ -43,6 +43,12 @@ class SettingsViewModel(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    /** A device-link login in progress: the code to show and the page to enter it on. */
+    data class LinkPrompt(val providerId: ProviderId, val code: String, val url: String)
+
+    private val _linkPrompt = MutableStateFlow<LinkPrompt?>(null)
+    val linkPrompt: StateFlow<LinkPrompt?> = _linkPrompt.asStateFlow()
+
     fun setEnabled(provider: StreamingProvider, enabled: Boolean) {
         viewModelScope.launch { settings.setEnabled(provider.id, enabled) }
     }
@@ -53,7 +59,7 @@ class SettingsViewModel(
 
     fun login(provider: StreamingProvider, email: String, password: String) {
         if (email.isBlank() || password.isBlank()) {
-            _message.value = "Enter an email and password"
+            _message.value = "Enter ${provider.capabilities.loginUserLabel} and ${provider.capabilities.loginPassLabel}"
             return
         }
         viewModelScope.launch {
@@ -81,6 +87,27 @@ class SettingsViewModel(
                 _message.value = "${provider.displayName}: logged in"
             } else {
                 _message.value = "${provider.displayName}: ${result.exceptionOrNull()?.message ?: "login failed"}"
+            }
+        }
+    }
+
+    fun startLink(provider: StreamingProvider) {
+        if (_linkPrompt.value != null) return // a link is already in progress
+        viewModelScope.launch {
+            val session = runCatching { provider.beginLink() }.getOrNull()
+            if (session == null) {
+                _message.value = "${provider.displayName}: linking unavailable"
+                return@launch
+            }
+            _linkPrompt.value = LinkPrompt(provider.id, session.code, session.verificationUrl)
+            val secret = runCatching { session.awaitToken() }.getOrNull()
+            _linkPrompt.value = null
+            if (secret != null) {
+                secrets.write(provider.id, secret)
+                _loggedIn.update { it + (provider.id to true) }
+                _message.value = "${provider.displayName}: linked"
+            } else {
+                _message.value = "${provider.displayName}: linking timed out — try again"
             }
         }
     }

@@ -19,6 +19,15 @@ data class ProviderCapabilities(
     val isLiveTv: Boolean = false,
     val requiresRegion: Boolean = false,
     val requiresAuth: Boolean = false,
+    // A login that is offered but not required — search works without it (Plex server, Arte/RTBF
+    // accounts). The Settings login form is shown for requiresAuth || optionalLogin.
+    val optionalLogin: Boolean = false,
+    // The login is a device-link flow (show a code, the user enters it on a web page) rather than a
+    // password form — used by Plex (plex.tv/link) so it works with two-factor accounts.
+    val linkLogin: Boolean = false,
+    // Labels for the two login fields (defaults suit an email/password form).
+    val loginUserLabel: String = "Email",
+    val loginPassLabel: String = "Password",
 )
 
 /** Per-provider runtime config, assembled from settings + the encrypted secret store. */
