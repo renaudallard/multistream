@@ -1,3 +1,5 @@
+![multistream — one app, every catalog](docs/banner.png)
+
 # multistream
 
 One Android app (phone/tablet **and** Android TV / Google TV) that federates the catalogs of
