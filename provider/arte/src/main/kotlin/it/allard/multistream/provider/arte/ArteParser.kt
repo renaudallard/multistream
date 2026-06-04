@@ -29,11 +29,14 @@ object ArteParser {
             val id = o["programId"].string() ?: o["id"].string() ?: return@mapNotNull null
             val url = o["url"].string() ?: "https://www.arte.tv/$lang/videos/$id/"
             val isCollection = o["kind"].obj()?.get("isCollection").bool() == true
+            // mainImage.url carries a __SIZE__ placeholder to fill with a WxH.
+            val poster = o["mainImage"].obj()?.get("url").string()?.replace("__SIZE__", "400x225")
             UnifiedSearchResult(
                 provider = ProviderId.ARTE,
                 ref = ProviderRef(ProviderId.ARTE, id, url, region),
                 title = title,
                 type = if (isCollection) MediaType.SERIES else MediaType.MOVIE,
+                posterUrl = poster,
                 availabilityType = AvailabilityType.FREE_ADS,
             )
         }

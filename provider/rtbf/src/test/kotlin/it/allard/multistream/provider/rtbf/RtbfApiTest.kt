@@ -30,7 +30,8 @@ class RtbfApiTest {
                 {"status":200,"data":[
                   {"type":"QUICK_LINK","content":[{"label":"Documentaires","path":"/categorie/documentaires-31"}]},
                   {"type":"PROGRAM_LIST","content":[
-                    {"id":"492","title":"Transversales","type":"SHOW","path":"/emission/transversales-492"}
+                    {"id":"492","title":"Transversales","type":"SHOW","path":"/emission/transversales-492",
+                     "illustration":{"xs":"https://img/xs.jpg","s":"https://img/s.jpg","m":"https://img/m.jpg"}}
                   ]},
                   {"type":"MEDIA_LIST","content":[
                     {"id":"3475510","title":"Les 24 heures moto","type":"VIDEO","path":"/media/les-24-heures-moto-3475510"}
@@ -44,6 +45,7 @@ class RtbfApiTest {
         val show = results.first { it.title == "Transversales" }
         assertEquals(MediaType.SERIES, show.type)
         assertEquals("https://auvio.rtbf.be/emission/transversales-492", show.ref.deepLinkHint)
+        assertEquals("https://img/m.jpg", show.posterUrl)
         assertEquals(MediaType.MOVIE, results.first { it.title == "Les 24 heures moto" }.type)
         assertTrue(server.takeRequest().path!!.contains("/search?query=doc"))
     }

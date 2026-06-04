@@ -11,6 +11,7 @@ import it.allard.multistream.core.net.string
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Extract Prime Video search results from the embedded `text/template` JSON. Tolerant: any object
@@ -43,6 +44,17 @@ object PrimeParser {
                     // Prime tags results with entityType "Movie" / "TV Show" (older pages: contentType).
                     val type = element["entityType"].string() ?: element["contentType"].string()
                     val media = if (type.equals("Movie", ignoreCase = true)) MediaType.MOVIE else MediaType.SERIES
+                    // Prime carries the poster inside an `images` object whose keys vary; walk it for
+                    // the first image URL. Plain covers are forced to a big 16:9 (~1.8 MB), so shrink
+                    // them; composited card images (`_CLs`) bake overlay coordinates at the original
+                    // size, so resizing them breaks the composite and must be left alone.
+                    val poster = (
+                        element["image"].string()
+                            ?: element["imageUrl"].string()
+                            ?: firstHttpUrl(element["images"])
+                        )?.let { url ->
+                            if (url.contains("_CLs")) url else url.replace(Regex("_UR\\d+,\\d+_"), "_UR480,270_")
+                        }
                     out.putIfAbsent(
                         id,
                         UnifiedSearchResult(
@@ -50,6 +62,7 @@ object PrimeParser {
                             ref = ProviderRef(ProviderId.PRIME, id, "https://app.primevideo.com/detail?gti=$id", region),
                             title = title,
                             type = media,
+                            posterUrl = poster,
                             availabilityType = AvailabilityType.SUBSCRIPTION,
                         ),
                     )
@@ -59,5 +72,13 @@ object PrimeParser {
             is JsonArray -> element.forEach { collect(it, region, out) }
             else -> Unit
         }
+    }
+
+    /** Depth-first search of an arbitrary JSON value for the first http(s) URL string. */
+    private fun firstHttpUrl(element: JsonElement?): String? = when (element) {
+        is JsonObject -> element.values.firstNotNullOfOrNull { firstHttpUrl(it) }
+        is JsonArray -> element.firstNotNullOfOrNull { firstHttpUrl(it) }
+        is JsonPrimitive -> element.string()?.takeIf { it.startsWith("http") }
+        else -> null
     }
 }

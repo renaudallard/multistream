@@ -10,6 +10,7 @@ import it.allard.multistream.core.net.string
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * Tolerant walker for Molotov's section/tile search responses (shapes vary: sections/items/results
@@ -55,20 +56,31 @@ object MolotovParser {
             ref = ProviderRef(ProviderId.MOLOTOV, id, slug?.let { "https://www.molotov.tv/$it" }, region),
             title = title,
             type = media,
-            posterUrl = firstUrl(tile["image_bundle"]),
+            posterUrl = posterImage(tile["image_bundle"]),
             availabilityType = if (media == MediaType.LIVE_CHANNEL) AvailabilityType.LIVE else AvailabilityType.SUBSCRIPTION,
         )
     }
 
-    private fun firstUrl(element: JsonElement?): String? {
+    private val IMAGE_SIZE = Regex("/(\\d+)x(\\d+)/")
+
+    /** Collect the bundle's image URLs and prefer a portrait one (the art comes in several shapes). */
+    private fun posterImage(element: JsonElement?): String? {
+        val urls = mutableListOf<String>()
+        collectUrls(element, urls)
+        return urls.firstOrNull { isPortrait(it) } ?: urls.firstOrNull()
+    }
+
+    private fun collectUrls(element: JsonElement?, out: MutableList<String>) {
         when (element) {
-            is JsonObject -> {
-                element["url"].string()?.let { if (it.startsWith("http")) return it }
-                element.values.forEach { firstUrl(it)?.let { url -> return url } }
-            }
-            is JsonArray -> element.forEach { firstUrl(it)?.let { url -> return url } }
+            is JsonObject -> element.values.forEach { collectUrls(it, out) }
+            is JsonArray -> element.forEach { collectUrls(it, out) }
+            is JsonPrimitive -> element.string()?.takeIf { it.startsWith("http") }?.let { out.add(it) }
             else -> Unit
         }
-        return null
+    }
+
+    private fun isPortrait(url: String): Boolean {
+        val match = IMAGE_SIZE.find(url) ?: return false
+        return match.groupValues[2].toInt() > match.groupValues[1].toInt()
     }
 }

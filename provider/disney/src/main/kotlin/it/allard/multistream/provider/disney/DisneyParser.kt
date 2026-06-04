@@ -38,13 +38,14 @@ object DisneyParser {
         val visuals = item["visuals"].obj() ?: return null
         val title = visuals["title"].string()?.takeIf { it.isNotBlank() } ?: return null
         val year = visuals["metastringParts"].obj()?.get("releaseYearRange").obj()?.get("startYear").int()
+        val poster = disneyPoster(visuals["artwork"])
         return UnifiedSearchResult(
             provider = ProviderId.DISNEY,
             ref = ProviderRef(ProviderId.DISNEY, id, "https://www.disneyplus.com/browse/entity-$id", region),
             title = title,
             type = MediaType.SERIES,
             year = year,
-            posterUrl = firstUrl(visuals["artwork"]),
+            posterUrl = poster,
             availabilityType = AvailabilityType.SUBSCRIPTION,
         )
     }
@@ -79,15 +80,26 @@ object DisneyParser {
         }
     }
 
-    private fun firstUrl(element: JsonElement?): String? {
-        when (element) {
-            is JsonObject -> {
-                element["url"].string()?.let { if (it.startsWith("http")) return it }
-                element.values.forEach { firstUrl(it)?.let { url -> return url } }
-            }
-            is kotlinx.serialization.json.JsonArray -> element.forEach { firstUrl(it)?.let { url -> return url } }
-            else -> Unit
-        }
-        return null
+    // Aspect-ratio tile keys, portrait (poster) shapes first.
+    private val PORTRAIT_TILES = listOf("0.67", "0.71", "0.75")
+
+    /**
+     * Disney artwork holds imageId UUIDs per shape (`standard.tile["0.67"].imageId`), not URLs. Pick a
+     * portrait tile and build the ripcut CDN URL; fall back to any tile shape, then to a raw URL.
+     */
+    private fun disneyPoster(artwork: JsonElement?): String? {
+        val tile = artwork.obj()?.get("standard").obj()?.get("tile").obj() ?: return firstUrl(artwork)
+        val key = (PORTRAIT_TILES + tile.keys).firstOrNull { tile[it] != null } ?: return firstUrl(artwork)
+        val imageId = tile[key].obj()?.get("imageId").string() ?: return firstUrl(artwork)
+        return "https://prod-ripcut-delivery.disney-plus.net/v1/variant/disney/$imageId/scale" +
+            "?width=400&aspectRatio=$key&format=jpeg"
+    }
+
+    /** Depth-first search of the artwork for the first http(s) URL string (Disney nests these deeply). */
+    private fun firstUrl(element: JsonElement?): String? = when (element) {
+        is JsonObject -> element.values.firstNotNullOfOrNull { firstUrl(it) }
+        is kotlinx.serialization.json.JsonArray -> element.firstNotNullOfOrNull { firstUrl(it) }
+        is kotlinx.serialization.json.JsonPrimitive -> element.string()?.takeIf { it.startsWith("http") }
+        else -> null
     }
 }

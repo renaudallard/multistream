@@ -30,6 +30,9 @@ object RtbfParser {
                 val id = o["id"].string() ?: o["id"].int()?.toString() ?: continue
                 val path = o["path"].string() ?: continue
                 val media = if (o["type"].string() == "SHOW") MediaType.SERIES else MediaType.MOVIE
+                // illustration is a size map (xs/s/m/l/xl); take a mid size for the poster.
+                val illustration = o["illustration"].obj()
+                val poster = illustration?.let { it["m"].string() ?: it["s"].string() ?: it["xs"].string() }
                 out.putIfAbsent(
                     id,
                     UnifiedSearchResult(
@@ -37,6 +40,7 @@ object RtbfParser {
                         ref = ProviderRef(ProviderId.RTBF, id, "https://auvio.rtbf.be$path", Region("BE")),
                         title = title,
                         type = media,
+                        posterUrl = poster,
                         availabilityType = AvailabilityType.FREE_ADS,
                     ),
                 )
