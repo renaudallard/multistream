@@ -20,14 +20,14 @@ class RtbfApi(
     private val client: OkHttpClient = buildClient(),
     private val baseUrl: String = "https://bff-service.rtbf.be/auvio/v1.23",
 ) {
-    suspend fun search(query: String): List<UnifiedSearchResult> {
+    suspend fun search(query: String, cookie: String? = null): List<UnifiedSearchResult> {
         val url = "$baseUrl/search?query=${URLEncoder.encode(query, "UTF-8")}"
-        val request = Request.Builder()
+        val builder = Request.Builder()
             .url(url)
             .header("Accept", "application/json")
             .header("User-Agent", USER_AGENT)
-            .get()
-            .build()
+        if (!cookie.isNullOrBlank()) builder.header("Cookie", cookie)
+        val request = builder.get().build()
         client.await(request).use { response ->
             if (!response.isSuccessful) throw RtbfApiException("HTTP ${response.code}")
             val root = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
