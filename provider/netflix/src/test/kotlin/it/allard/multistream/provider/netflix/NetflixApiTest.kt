@@ -2,7 +2,6 @@ package it.allard.multistream.provider.netflix
 
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.Region
-import it.allard.multistream.core.net.buildClient
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -19,7 +18,7 @@ class NetflixApiTest {
     @Before fun setUp() {
         server = MockWebServer()
         server.start()
-        api = NetflixApi(client = buildClient(), homeUrl = server.url("/browse").toString())
+        api = NetflixApi(homeUrl = server.url("/browse").toString())
     }
 
     @After fun tearDown() = server.shutdown()
@@ -102,7 +101,8 @@ class NetflixApiTest {
     }
 
     @Test fun notLoggedIn_throwsAuthError() {
-        server.enqueue(MockResponse().setBody("<html>login page without reactContext</html>"))
+        // The session refresh re-fetches /browse once on the auth error, so both attempts see login.
+        repeat(2) { server.enqueue(MockResponse().setBody("<html>login page without reactContext</html>")) }
         try {
             runBlocking { api.search("x", "bad=cookie", Region("US")) }
             throw AssertionError("expected NetflixApiException")

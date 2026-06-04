@@ -45,6 +45,16 @@ class InMemoryCookieJar : CookieJar {
     override fun loadForRequest(url: HttpUrl): List<Cookie> =
         store[url.host]?.let { synchronized(it) { it.toList() } } ?: emptyList()
 
+    /** Seed from a request-style "n=v; n=v" cookie header captured elsewhere (e.g. at login). */
+    fun seed(url: HttpUrl, cookieHeader: String) {
+        val cookies = cookieHeader.split(';').mapNotNull { Cookie.parse(url, it.trim()) }
+        if (cookies.isNotEmpty()) saveFromResponse(url, cookies)
+    }
+
+    /** The current cookies for [url] as a request-style "n=v; n=v" header. */
+    fun export(url: HttpUrl): String =
+        loadForRequest(url).joinToString("; ") { "${it.name}=${it.value}" }
+
     fun clear() = store.clear()
 }
 

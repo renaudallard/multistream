@@ -4,13 +4,14 @@ import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.model.normalizeTitle
+import it.allard.multistream.core.net.InMemoryCookieJar
 import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.await
 import it.allard.multistream.core.net.buildClient
 import it.allard.multistream.core.net.obj
 import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 
@@ -20,12 +21,17 @@ class NetflixApiException(message: String, val authError: Boolean = false) : Exc
  * Netflix web Shakti/Falcor client. The app's own API is MSL-encrypted, so search uses the website:
  * a logged-in cookie session yields a `reactContext` with the member API base + authURL, then a
  * `pathEvaluator` Falcor request returns the matched videos. Modeled on the Kodi CastagnaIT addon.
- * Fragile (BUILD_ID rotation, bot defenses) but pure Kotlin and MockWebServer-testable.
+ *
+ * The session self-heals: cookies live in a jar that captures Netflix's rotations (exposed via
+ * [currentCookies] to persist back), and an auth error drops the cached reactContext, re-validates
+ * against /browse and retries once before giving up.
  */
 class NetflixApi(
-    private val client: OkHttpClient = buildClient(),
     private val homeUrl: String = "https://www.netflix.com/browse",
 ) {
+    private val cookieJar = InMemoryCookieJar()
+    private val client = buildClient(cookieJar)
+
     private data class Session(val memberApi: String, val authUrl: String, val userGuid: String?)
 
     @Volatile
@@ -35,8 +41,45 @@ class NetflixApi(
         session = null
     }
 
+    /** Clear the cached session and cookies — call on a fresh login. */
+    fun reset() {
+        cookieJar.clear()
+        session = null
+    }
+
+    /** Current session cookies, including any rotation Netflix applied, for persisting back. */
+    fun currentCookies(): String = cookieJar.export(COOKIE_URL)
+
     suspend fun search(query: String, cookies: String, region: Region): List<UnifiedSearchResult> {
-        val current = session ?: prepareSession(cookies).also { session = it }
+        seed(cookies)
+        return withRefresh { doSearch(query, region) }
+    }
+
+    /** Seasons + episodes for a show via the clean /metadata endpoint (no Falcor needed). */
+    suspend fun getSeasons(videoId: String, cookies: String): List<Season> {
+        seed(cookies)
+        return withRefresh { doGetSeasons(videoId) }
+    }
+
+    /** Seed the jar from the stored cookie the first time; later rotations stay in the jar. */
+    private fun seed(cookies: String) {
+        if (cookieJar.loadForRequest(COOKIE_URL).none { it.name == "NetflixId" }) {
+            cookieJar.seed(COOKIE_URL, cookies)
+        }
+    }
+
+    /** Run [block]; on an auth error, drop the cached session, re-validate against /browse, retry once. */
+    private suspend fun <T> withRefresh(block: suspend () -> T): T =
+        try {
+            block()
+        } catch (e: NetflixApiException) {
+            if (!e.authError) throw e
+            invalidate()
+            block()
+        }
+
+    private suspend fun doSearch(query: String, region: Region): List<UnifiedSearchResult> {
+        val current = session ?: prepareSession().also { session = it }
         val term = query.replace("\\", "").replace("\"", "")
         // Search results are nested Falcor refs: titles[size][range] -> byReference -> videos. Mirror
         // the CastagnaIT addon's two paths (the size level is required) so Netflix materializes the
@@ -51,7 +94,6 @@ class NetflixApi(
             "&original_path=/shakti/mre/pathEvaluator"
         val builder = Request.Builder()
             .url(url)
-            .header("Cookie", cookies)
             .header("Accept", "*/*")
             .header("Content-Type", "application/x-www-form-urlencoded")
             .header("User-Agent", USER_AGENT)
@@ -66,8 +108,20 @@ class NetflixApi(
             .filter { normQuery.isBlank() || normalizeTitle(it.title).contains(normQuery) }
     }
 
-    private suspend fun prepareSession(cookies: String): Session {
-        val request = Request.Builder().url(homeUrl).header("Cookie", cookies).header("User-Agent", USER_AGENT).get().build()
+    private suspend fun doGetSeasons(videoId: String): List<Season> {
+        val current = session ?: prepareSession().also { session = it }
+        val url = "${current.memberApi}/metadata?movieid=$videoId&authURL=${current.authUrl}"
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .get()
+            .build()
+        return NetflixParser.parseSeasons(exec(request))
+    }
+
+    private suspend fun prepareSession(): Session {
+        val request = Request.Builder().url(homeUrl).header("User-Agent", USER_AGENT).get().build()
         client.await(request).use { response ->
             val html = response.body?.string().orEmpty()
             // Pull the few values we need straight out of the reactContext rather than parsing the
@@ -109,20 +163,6 @@ class NetflixApi(
     private fun decodeJsHex(s: String): String =
         JS_HEX_ESCAPE.replace(s) { it.groupValues[1].toInt(16).toChar().toString() }
 
-    /** Seasons + episodes for a show via the clean /metadata endpoint (no Falcor needed). */
-    suspend fun getSeasons(videoId: String, cookies: String): List<Season> {
-        val current = session ?: prepareSession(cookies).also { session = it }
-        val url = "${current.memberApi}/metadata?movieid=$videoId&authURL=${current.authUrl}"
-        val request = Request.Builder()
-            .url(url)
-            .header("Cookie", cookies)
-            .header("Accept", "application/json")
-            .header("User-Agent", USER_AGENT)
-            .get()
-            .build()
-        return NetflixParser.parseSeasons(exec(request))
-    }
-
     private suspend fun exec(request: Request): JsonObject {
         client.await(request).use { response ->
             val text = response.body?.string().orEmpty()
@@ -138,6 +178,7 @@ class NetflixApi(
     private companion object {
         const val PAGE_SIZE = 47
         val FORM_MEDIA = "application/x-www-form-urlencoded".toMediaType()
+        val COOKIE_URL = "https://www.netflix.com".toHttpUrl()
         const val USER_AGENT =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
         // Netflix escapes characters as \xHH inside the inline reactContext JSON; decode them.

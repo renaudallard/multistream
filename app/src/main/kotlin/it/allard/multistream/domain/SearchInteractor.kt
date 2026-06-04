@@ -68,7 +68,12 @@ class SearchInteractor(
             ?: settings.region(provider.id)
             ?: provider.supportedRegions().firstOrNull()
             ?: Region("US")
-        val config = ProviderConfig(region, enabled = true, secrets = secrets.read(provider.id))
+        val config = ProviderConfig(
+            region,
+            enabled = true,
+            secrets = secrets.read(provider.id),
+            persistSecrets = { secrets.write(provider.id, it) },
+        )
         val seasons = runCatching { provider.getSeasons(availability.ref, config) }.getOrDefault(emptyList())
         return if (seasons.isNotEmpty()) base.copy(seasons = seasons) else base
     }
@@ -89,7 +94,16 @@ class SearchInteractor(
                 val region = settings.region(provider.id)
                     ?: provider.supportedRegions().firstOrNull()
                     ?: Region("US")
-                provider.search(query, region, ProviderConfig(region, enabled = true, secrets = secrets.read(provider.id)))
+                provider.search(
+                    query,
+                    region,
+                    ProviderConfig(
+                        region,
+                        enabled = true,
+                        secrets = secrets.read(provider.id),
+                        persistSecrets = { secrets.write(provider.id, it) },
+                    ),
+                )
             }.getOrNull()
         } ?: emptyList()
 

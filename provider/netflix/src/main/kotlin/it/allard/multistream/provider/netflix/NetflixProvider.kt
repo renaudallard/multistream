@@ -58,7 +58,7 @@ class NetflixProvider(
 
     override suspend fun loginWithCookies(cookies: String): ProviderSecrets {
         this.cookies = cookies
-        api.invalidate()
+        api.reset()
         return ProviderSecrets(cookie = cookies)
     }
 
@@ -71,10 +71,21 @@ class NetflixProvider(
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
         val cookie = cookies ?: return emptyList()
         return try {
-            api.search(query, cookie, region)
+            val results = api.search(query, cookie, region)
+            persistRotated(cookie, config)
+            results
         } catch (e: NetflixApiException) {
             if (e.authError) api.invalidate()
             emptyList()
+        }
+    }
+
+    /** If Netflix rotated the session cookies during the call, keep and persist them. */
+    private fun persistRotated(seeded: String, config: ProviderConfig) {
+        val current = api.currentCookies()
+        if (current.contains("NetflixId") && current != seeded) {
+            cookies = current
+            config.persistSecrets?.invoke(ProviderSecrets(cookie = current))
         }
     }
 

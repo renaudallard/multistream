@@ -26,6 +26,8 @@ data class ProviderConfig(
     val region: Region,
     val enabled: Boolean,
     val secrets: ProviderSecrets,
+    // Lets a provider write back a refreshed/rotated session so it survives restarts. Null = no-op.
+    val persistSecrets: ((ProviderSecrets) -> Unit)? = null,
 )
 
 sealed interface SessionState {
