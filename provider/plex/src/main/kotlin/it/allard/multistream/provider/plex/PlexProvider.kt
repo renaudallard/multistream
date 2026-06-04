@@ -9,14 +9,19 @@ import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.Launcher
+import it.allard.multistream.provider.api.LinkSession
 import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.SessionState
 import it.allard.multistream.provider.api.StreamingProvider
 
 /**
- * Plex. Email/password login yields an X-Plex-Token; search runs against Plex Discover and is keyed
- * by ratingKey, deep-linking into the Plex app at watch.plex.tv. Region-independent.
+ * Plex. Search works anonymously against Plex Discover. The optional login is the plex.tv/link device
+ * flow (so it works with two-factor accounts): the app shows a code, the user enters it at
+ * plex.tv/link, and the app then keeps the account token and auto-discovers the member's own Plex
+ * Media Server (no token to paste). Search queries that server's library, falling back to a
+ * personalized Discover search if the server is not reachable. Region-independent. Results deep-link
+ * to watch.plex.tv when a slug is known, else open the Plex app.
  */
 class PlexProvider(
     private val api: PlexApi = PlexApi(),
@@ -27,30 +32,71 @@ class PlexProvider(
     override val capabilities = ProviderCapabilities(
         canSearch = true,
         canDeepLinkToTitle = true,
-        requiresAuth = true,
+        requiresAuth = false,
+        optionalLogin = true,
+        linkLogin = true,
     )
+
+    @Volatile
+    private var server: String? = null
 
     @Volatile
     private var token: String? = null
 
-    override suspend fun login(username: String, password: String): ProviderSecrets {
-        val t = api.login(username, password)
-        token = t
-        return ProviderSecrets(token = t)
+    @Volatile
+    private var accountToken: String? = null
+
+    override suspend fun beginLink(): LinkSession {
+        val pin = api.createPin()
+        // Plex's OAuth flow: open app.plex.tv/auth with the code + device context embedded so the user
+        // just approves (handles 2FA in the browser), then poll the PIN for the token.
+        return LinkSession(
+            code = pin.code,
+            verificationUrl = "https://app.plex.tv/auth#?clientID=it.allard.multistream&code=${pin.code}" +
+                "&context%5Bdevice%5D%5Bproduct%5D=multistream",
+            awaitToken = {
+                api.pollPin(pin.id, pin.code)?.let { account ->
+                    accountToken = account
+                    // Auto-discover the member's own server from the linked account token.
+                    val connection = api.connectServer(account)
+                    server = connection?.first
+                    token = connection?.second ?: account
+                    ProviderSecrets(
+                        token = token!!,
+                        extra = buildMap {
+                            connection?.let { put("server", it.first) }
+                            put("account", account)
+                        },
+                    )
+                }
+            },
+        )
     }
 
     override suspend fun ensureSession(config: ProviderConfig): SessionState {
-        if (token == null) token = config.secrets.token
-        return if (token != null) SessionState.Ready else SessionState.NeedsLogin("Plex login required")
+        if (token == null) {
+            token = config.secrets.token
+            server = config.secrets.extra["server"]
+            accountToken = config.secrets.extra["account"]
+        }
+        // Search always works (anonymous Discover when logged out); a server is optional.
+        return SessionState.Ready
     }
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
-        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        ensureSession(config)
+        val serverUrl = server
+        val serverToken = token
+        val discoverToken = accountToken ?: token
         return try {
-            api.search(query, token)
+            if (serverUrl != null && serverToken != null) {
+                api.searchServer(serverUrl, serverToken, query)
+            } else {
+                api.search(query, discoverToken)
+            }
         } catch (e: PlexApiException) {
-            if (e.authError) token = null
-            emptyList()
+            // A bad/unreachable server must never blank out search: fall back to Discover.
+            runCatching { api.search(query, discoverToken) }.getOrDefault(emptyList())
         }
     }
 
