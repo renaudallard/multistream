@@ -8,6 +8,7 @@ import it.allard.multistream.core.model.Title
 import it.allard.multistream.core.model.TitleKey
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.model.mergeResults
+import it.allard.multistream.core.model.rankByRelevance
 import it.allard.multistream.di.ProviderRegistry
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
@@ -40,7 +41,7 @@ class SearchInteractor(
         synchronized(accumulated) { accumulated.addAll(SampleCatalog.search(query)) }
         val remaining = AtomicInteger(providers.size)
 
-        emit(accumulated, loading = providers.isNotEmpty())
+        emit(query, accumulated, loading = providers.isNotEmpty())
         for (provider in providers) {
             launch {
                 val results = runProviderSearch(provider, query)
@@ -48,7 +49,7 @@ class SearchInteractor(
                     accumulated.addAll(results)
                     accumulated.toList()
                 }
-                send(SearchUpdate(mergeAndIndex(snapshot), loading = remaining.decrementAndGet() > 0))
+                send(SearchUpdate(mergeAndIndex(query, snapshot), loading = remaining.decrementAndGet() > 0))
             }
         }
     }
@@ -78,12 +79,12 @@ class SearchInteractor(
         return if (seasons.isNotEmpty()) base.copy(seasons = seasons) else base
     }
 
-    private suspend fun ProducerScope<SearchUpdate>.emit(results: List<UnifiedSearchResult>, loading: Boolean) {
-        send(SearchUpdate(mergeAndIndex(synchronized(results) { results.toList() }), loading))
+    private suspend fun ProducerScope<SearchUpdate>.emit(query: String, results: List<UnifiedSearchResult>, loading: Boolean) {
+        send(SearchUpdate(mergeAndIndex(query, synchronized(results) { results.toList() }), loading))
     }
 
-    private fun mergeAndIndex(results: List<UnifiedSearchResult>): List<Title> {
-        val merged = mergeResults(results)
+    private fun mergeAndIndex(query: String, results: List<UnifiedSearchResult>): List<Title> {
+        val merged = rankByRelevance(query, mergeResults(results))
         merged.forEach { index[it.key.serialize()] = it }
         return merged
     }

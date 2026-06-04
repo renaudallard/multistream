@@ -90,6 +90,34 @@ class ReconcileTest {
         assertEquals(withYear, TitleKey.parse(withYear.serialize()))
     }
 
+    @Test fun rankByRelevance_orders_full_matches_before_partial() {
+        val titles = mergeResults(
+            listOf(
+                result(ProviderId.RTS, "Police Squad", 1982, MediaType.SERIES),
+                result(ProviderId.NETFLIX, "Police Academy", 1984, MediaType.MOVIE),
+                result(ProviderId.RTBF, "The Police Academy Story", 2000, MediaType.MOVIE),
+                result(ProviderId.PRIME, "Police Academy 2", 1985, MediaType.MOVIE),
+                result(ProviderId.DISNEY, "Naked Gun", 1988, MediaType.MOVIE),
+            )
+        )
+        val ranked = rankByRelevance("police academy", titles).map { it.primaryTitle }
+        assertEquals("Police Academy", ranked.first())
+        assertTrue(ranked.indexOf("Police Academy 2") < ranked.indexOf("Police Squad"))
+        assertTrue(ranked.indexOf("The Police Academy Story") < ranked.indexOf("Police Squad"))
+        assertTrue(ranked.indexOf("Police Squad") < ranked.indexOf("Naked Gun"))
+    }
+
+    @Test fun rankByRelevance_tolerates_a_typo_in_the_query() {
+        val titles = mergeResults(
+            listOf(
+                result(ProviderId.PRIME, "The Grand Tour", 2016, MediaType.SERIES),
+                result(ProviderId.PRIME, "Clarkson's Farm", 2021, MediaType.SERIES),
+            )
+        )
+        // "clarckson" (extra c) still ranks the title match first.
+        assertEquals("Clarkson's Farm", rankByRelevance("clarckson", titles).map { it.primaryTitle }.first())
+    }
+
     @Test fun external_id_match_merges_despite_title_difference() {
         val merged = mergeResults(
             listOf(

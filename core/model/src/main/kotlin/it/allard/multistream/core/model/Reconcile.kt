@@ -74,6 +74,55 @@ fun mergeResults(
     return out
 }
 
+/**
+ * Order merged titles by how well they match the query. An exact normalized match ranks first, then
+ * a title that starts with the query, then one that contains the whole query phrase, then titles
+ * holding all query words, then partial-word matches. A title offered by more providers breaks ties.
+ * Ties otherwise keep merge order. This surfaces "Police Academy" (from any service) above the
+ * "police ..." partial matches.
+ */
+fun rankByRelevance(query: String, titles: List<Title>): List<Title> {
+    val q = normalizeTitle(query)
+    if (q.isBlank()) return titles
+    val words = q.split(' ').filter { it.isNotEmpty() }
+    return titles.sortedByDescending { relevanceScore(q, words, normalizeTitle(it.primaryTitle), it.availabilities.size) }
+}
+
+private fun relevanceScore(query: String, words: List<String>, title: String, providers: Int): Int {
+    val titleWords = title.split(' ').filter { it.isNotEmpty() }
+    fun matches(queryWord: String) = titleWords.any { it.contains(queryWord) || fuzzyMatch(queryWord, it) }
+    val base = when {
+        title == query -> 1000
+        title.startsWith(query) -> 800
+        title.contains(query) -> 600
+        words.isNotEmpty() && words.all { matches(it) } -> 400
+        else -> words.count { matches(it) } * 200 / words.size.coerceAtLeast(1)
+    }
+    return base + providers.coerceAtMost(9)
+}
+
+/** True when [word] is within a small edit distance of [candidate] (tolerates query typos). */
+private fun fuzzyMatch(word: String, candidate: String): Boolean {
+    if (word.length < 4) return false
+    val tolerance = word.length / 4 + 1
+    if (abs(word.length - candidate.length) > tolerance) return false
+    return levenshtein(word, candidate) <= tolerance
+}
+
+private fun levenshtein(a: String, b: String): Int {
+    var prev = IntArray(b.length + 1) { it }
+    for (i in 1..a.length) {
+        val curr = IntArray(b.length + 1)
+        curr[0] = i
+        for (j in 1..b.length) {
+            val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+            curr[j] = minOf(prev[j] + 1, curr[j - 1] + 1, prev[j - 1] + cost)
+        }
+        prev = curr
+    }
+    return prev[b.length]
+}
+
 /** Split rows that share (type, normTitle) into clusters whose years are within 1 of each other. */
 private fun clusterByYear(members: List<UnifiedSearchResult>): List<List<UnifiedSearchResult>> {
     val withYear = members.filter { it.year != null }.sortedBy { it.year }
