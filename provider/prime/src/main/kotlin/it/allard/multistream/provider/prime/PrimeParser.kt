@@ -22,9 +22,14 @@ object PrimeParser {
 
     fun parse(html: String, region: Region): List<UnifiedSearchResult> {
         val out = LinkedHashMap<String, UnifiedSearchResult>()
-        for (match in TEMPLATE.findAll(html)) {
-            val json = runCatching { NetJson.parseToJsonElement(match.groupValues[1]) }.getOrNull() ?: continue
-            collect(json, region, out)
+        // The search endpoint returns JSON (Accept: application/json); walk the whole document for
+        // any object carrying a title + title id.
+        runCatching { NetJson.parseToJsonElement(html) }.getOrNull()?.let { collect(it, region, out) }
+        // Fall back to the older embedded text/template blocks if the JSON form yielded nothing.
+        if (out.isEmpty()) {
+            for (match in TEMPLATE.findAll(html)) {
+                runCatching { NetJson.parseToJsonElement(match.groupValues[1]) }.getOrNull()?.let { collect(it, region, out) }
+            }
         }
         return out.values.toList()
     }
@@ -32,10 +37,12 @@ object PrimeParser {
     private fun collect(element: JsonElement, region: Region, out: MutableMap<String, UnifiedSearchResult>) {
         when (element) {
             is JsonObject -> {
-                val title = element["title"].string()
+                val title = element["title"].string() ?: element["displayTitle"].string()
                 val id = ID_KEYS.firstNotNullOfOrNull { element[it].string() }
                 if (!title.isNullOrBlank() && id != null) {
-                    val media = if (element["contentType"].string()?.uppercase() == "MOVIE") MediaType.MOVIE else MediaType.SERIES
+                    // Prime tags results with entityType "Movie" / "TV Show" (older pages: contentType).
+                    val type = element["entityType"].string() ?: element["contentType"].string()
+                    val media = if (type.equals("Movie", ignoreCase = true)) MediaType.MOVIE else MediaType.SERIES
                     out.putIfAbsent(
                         id,
                         UnifiedSearchResult(

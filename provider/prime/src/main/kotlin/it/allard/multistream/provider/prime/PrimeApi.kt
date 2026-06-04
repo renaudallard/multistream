@@ -2,6 +2,7 @@ package it.allard.multistream.provider.prime
 
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.UnifiedSearchResult
+import it.allard.multistream.core.model.normalizeTitle
 import it.allard.multistream.core.net.await
 import it.allard.multistream.core.net.buildClient
 import okhttp3.OkHttpClient
@@ -33,7 +34,11 @@ class PrimeApi(
             val html = response.body?.string().orEmpty()
             if (response.code == 401 || response.code == 403) throw PrimeApiException("Unauthorized", authError = true)
             if (!response.isSuccessful) throw PrimeApiException("HTTP ${response.code}")
-            return PrimeParser.parse(html, region)
+            val all = PrimeParser.parse(html, region)
+            // Amazon pads matches with related titles; prefer exact title matches but never drop to
+            // nothing (a localized title may not substring-match the query).
+            val normQuery = normalizeTitle(query)
+            return all.filter { normQuery.isBlank() || normalizeTitle(it.title).contains(normQuery) }.ifEmpty { all }
         }
     }
 

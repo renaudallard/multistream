@@ -45,6 +45,24 @@ class PrimeApiTest {
         assertTrue(server.takeRequest().path!!.contains("/gp/video/search?phrase=the"))
     }
 
+    @Test fun search_walksWholeJsonResponseAndFiltersUnrelated() = runBlocking {
+        // Modern Prime returns plain JSON (no text/template); results carry title + titleID + entityType.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                "{\"results\":[" +
+                    "{\"title\":\"Police Academy\",\"titleID\":\"amzn1.dv.gti.aaa\",\"entityType\":\"Movie\"}," +
+                    "{\"title\":\"Police Academy 4 - Citizens on Patrol\",\"titleID\":\"amzn1.dv.gti.bbb\",\"entityType\":\"Movie\"}," +
+                    "{\"title\":\"Some Cop Show\",\"titleID\":\"amzn1.dv.gti.ccc\",\"entityType\":\"TV Show\"}" +
+                    "]}",
+            ),
+        )
+        val results = api.search("police academy", "at-main=tok", Region("US"))
+        // "Some Cop Show" doesn't contain the query, so it is filtered out.
+        assertEquals(2, results.size)
+        assertEquals(MediaType.MOVIE, results.first { it.title == "Police Academy" }.type)
+        assertEquals("https://app.primevideo.com/detail?gti=amzn1.dv.gti.aaa", results.first().ref.deepLinkHint)
+    }
+
     @Test fun forbidden_throwsAuthError() {
         server.enqueue(MockResponse().setResponseCode(403))
         try {
