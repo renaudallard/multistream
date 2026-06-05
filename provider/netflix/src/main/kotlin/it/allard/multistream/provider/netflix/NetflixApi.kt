@@ -1,5 +1,7 @@
 package it.allard.multistream.provider.netflix
 
+import it.allard.multistream.core.model.ProviderRef
+import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
@@ -61,6 +63,12 @@ class NetflixApi(
         return withRefresh { doGetSeasons(videoId) }
     }
 
+    /** Synopsis + year from /metadata, plus the cast resolved through one Falcor path. */
+    suspend fun getDetails(videoId: String, cookies: String, ref: ProviderRef): ProviderTitleDetails? {
+        seed(cookies)
+        return withRefresh { doGetDetails(videoId, ref) }
+    }
+
     /** Seed the jar from the stored cookie the first time; later rotations stay in the jar. */
     private fun seed(cookies: String) {
         if (cookieJar.loadForRequest(COOKIE_URL).none { it.name == "NetflixId" }) {
@@ -88,6 +96,58 @@ class NetflixApi(
         val idPath = "$base,[\"id\",\"name\",\"requestId\",\"trackIds\"]]"
         val refPath = "$base,{\"from\":0,\"to\":24},\"reference\",[\"summary\",\"title\"]]"
         val body = "path=$refPath&path=$idPath&authURL=${current.authUrl}"
+        val jsonGraph = exec(pathEvaluatorRequest(current, body))["jsonGraph"].obj() ?: return emptyList()
+        // Netflix's byTerm search pads the real match with themed suggestions; keep only titles that
+        // actually contain the query so the unified results aren't polluted.
+        val normQuery = normalizeTitle(query)
+        val matched = NetflixParser.parse(jsonGraph, region)
+            .filter { normQuery.isBlank() || normalizeTitle(it.title).contains(normQuery) }
+        // Boxart isn't materialized through the search reference path, so fetch it for the matched ids
+        // in a second pathEvaluator call (this is what the reference client does) and attach posters.
+        val posters = runCatching { fetchBoxarts(current, matched.map { it.ref.providerTitleId }) }.getOrDefault(emptyMap())
+        return matched.map { result -> posters[result.ref.providerTitleId]?.let { result.copy(posterUrl = it) } ?: result }
+    }
+
+    private suspend fun doGetSeasons(videoId: String): List<Season> {
+        val current = session ?: prepareSession().also { session = it }
+        return NetflixParser.parseSeasons(exec(metadataRequest(current, videoId)))
+    }
+
+    private suspend fun doGetDetails(videoId: String, ref: ProviderRef): ProviderTitleDetails? {
+        val current = session ?: prepareSession().also { session = it }
+        val metadata = exec(metadataRequest(current, videoId))
+        val cast = runCatching { fetchCast(current, videoId) }.getOrDefault(emptyList())
+        return NetflixParser.parseDetails(metadata, cast, ref)
+    }
+
+    /** Resolve poster art for the matched ids: videos[ids].boxarts[size].jpg -> a url. */
+    private suspend fun fetchBoxarts(current: Session, ids: List<String>): Map<String, String> {
+        val idList = ids.mapNotNull { it.toLongOrNull() }.joinToString(",")
+        if (idList.isEmpty()) return emptyMap()
+        val sizes = "[\"${NetflixParser.ART_POSTER}\",\"${NetflixParser.ART_LANDSCAPE}\"]"
+        val body = "path=[\"videos\",[$idList],\"boxarts\",$sizes,\"jpg\",\"value\"]&authURL=${current.authUrl}"
+        val jsonGraph = exec(pathEvaluatorRequest(current, body))["jsonGraph"].obj() ?: return emptyMap()
+        return NetflixParser.parseBoxarts(jsonGraph, ids)
+    }
+
+    /** One Falcor path resolves a video's billed cast: videos[id].cast -> person[pid].name. */
+    private suspend fun fetchCast(current: Session, videoId: String): List<String> {
+        val id = videoId.toLongOrNull() ?: return emptyList()
+        val path = "[\"videos\",$id,\"cast\",{\"from\":0,\"to\":14},[\"id\",\"name\"]]"
+        val body = "path=$path&authURL=${current.authUrl}"
+        val jsonGraph = exec(pathEvaluatorRequest(current, body))["jsonGraph"].obj() ?: return emptyList()
+        return NetflixParser.parseCast(jsonGraph, videoId)
+    }
+
+    private fun metadataRequest(current: Session, videoId: String): Request = Request.Builder()
+        .url("${current.memberApi}/metadata?movieid=$videoId&authURL=${current.authUrl}")
+        .header("Accept", "application/json")
+        .header("User-Agent", USER_AGENT)
+        .get()
+        .build()
+
+    /** Shared Falcor POST builder for /pathEvaluator (search and cast use identical params/headers). */
+    private fun pathEvaluatorRequest(current: Session, body: String): Request {
         val url = "${current.memberApi}/pathEvaluator" +
             "?drmSystem=widevine&falcor_server=0.1.0&withSize=false&materialize=false" +
             "&routeAPIRequestsThroughFTL=false&isVolatileBillboardsEnabled=true&isTop10Supported=true" +
@@ -100,24 +160,7 @@ class NetflixApi(
             .header("x-netflix.nq.stack", "prod")
             .post(body.toRequestBody(FORM_MEDIA))
         current.userGuid?.let { builder.header("x-netflix.request.client.user.guid", it) }
-        val jsonGraph = exec(builder.build())["jsonGraph"].obj() ?: return emptyList()
-        // Netflix's byTerm search pads the real match with themed suggestions; keep only titles that
-        // actually contain the query so the unified results aren't polluted.
-        val normQuery = normalizeTitle(query)
-        return NetflixParser.parse(jsonGraph, region)
-            .filter { normQuery.isBlank() || normalizeTitle(it.title).contains(normQuery) }
-    }
-
-    private suspend fun doGetSeasons(videoId: String): List<Season> {
-        val current = session ?: prepareSession().also { session = it }
-        val url = "${current.memberApi}/metadata?movieid=$videoId&authURL=${current.authUrl}"
-        val request = Request.Builder()
-            .url(url)
-            .header("Accept", "application/json")
-            .header("User-Agent", USER_AGENT)
-            .get()
-            .build()
-        return NetflixParser.parseSeasons(exec(request))
+        return builder.build()
     }
 
     private suspend fun prepareSession(): Session {

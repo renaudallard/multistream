@@ -6,6 +6,7 @@ import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
+import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
@@ -43,6 +44,19 @@ class NetflixProvider(
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
         val cookie = cookies ?: return emptyList()
         return runCatching { api.getSeasons(ref.providerTitleId, cookie) }.getOrDefault(emptyList())
+    }
+
+    override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? {
+        if (ensureSession(config) !is SessionState.Ready) return null
+        val cookie = cookies ?: return null
+        return try {
+            val details = api.getDetails(ref.providerTitleId, cookie, ref)
+            persistRotated(cookie, config)
+            details
+        } catch (e: NetflixApiException) {
+            if (e.authError) api.invalidate()
+            null
+        }
     }
 
     override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(

@@ -1,6 +1,8 @@
 package it.allard.multistream.provider.netflix
 
 import it.allard.multistream.core.model.MediaType
+import it.allard.multistream.core.model.ProviderId
+import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.Region
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
@@ -57,6 +59,14 @@ class NetflixApiTest {
             ),
         )
 
+        // Second pathEvaluator call resolves boxart for the matched id only (80057281).
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                "{\"jsonGraph\":{\"videos\":{\"80057281\":{\"boxarts\":{\"_342x684\":{\"jpg\":" +
+                    "{\"$t\":\"atom\",\"value\":{\"url\":\"https://art/st.jpg\",\"isSmoky\":false}}}}}}}}",
+            ),
+        )
+
         // "Black Mirror" is one of Netflix's themed suggestions; it doesn't contain the query and is
         // filtered out, leaving only the real match.
         val results = api.search("stranger", "NetflixId=abc; SecureNetflixId=def", Region("US"))
@@ -64,6 +74,7 @@ class NetflixApiTest {
         val st = results.first { it.title == "Stranger Things" }
         assertEquals(MediaType.SERIES, st.type)
         assertEquals("https://www.netflix.com/title/80057281", st.ref.deepLinkHint)
+        assertEquals("https://art/st.jpg", st.posterUrl)
 
         // session page fetched, then a pathEvaluator POST carrying authURL + the reference path
         assertTrue(server.takeRequest().path!!.contains("/browse"))
@@ -74,6 +85,12 @@ class NetflixApiTest {
         assertTrue(postBody.contains("authURL=AUTH123"))
         assertTrue(postBody.contains("\"|stranger\",\"titles\""))
         assertTrue(postBody.contains("\"reference\",[\"summary\",\"title\"]"))
+        // boxart is fetched for the matched id in a second pathEvaluator call
+        val boxPost = server.takeRequest()
+        assertTrue(boxPost.path!!.contains("/pathEvaluator"))
+        val boxBody = boxPost.body.readUtf8()
+        assertTrue(boxBody.contains("\"videos\",[80057281]"))
+        assertTrue(boxBody.contains("\"boxarts\",[\"_342x684\",\"_665x375\"]"))
     }
 
     @Test fun getSeasons_parsesMetadata() = runBlocking {
@@ -98,6 +115,43 @@ class NetflixApiTest {
         assertEquals(30, seasons[0].episodes[0].runtimeMin)
         assertTrue(server.takeRequest().path!!.contains("/browse"))
         assertTrue(server.takeRequest().path!!.contains("/metadata?movieid=80057281"))
+    }
+
+    @Test fun getDetails_parsesSynopsisYearAndCast() = runBlocking {
+        val memberApi = server.url("/api/shakti/BUILD").toString().removeSuffix("/")
+        server.enqueue(
+            MockResponse().setBody(
+                "<script>netflix.reactContext = {\"models\":{\"services\":{\"data\":{\"memberapi\":\"$memberApi\"}}," +
+                    "\"userInfo\":{\"data\":{\"authURL\":\"A\"}}}};</script>",
+            ),
+        )
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"video":{"title":"Ozark","type":"movie","year":2017,"synopsis":"A planner launders money."}}""",
+            ),
+        )
+        val t = "${'$'}type"
+        // videos[id].cast is an index map of ["person", pid] refs; person[pid].name holds the name atom.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                "{\"jsonGraph\":{" +
+                    "\"videos\":{\"80117552\":{\"cast\":{" +
+                    "\"0\":{\"$t\":\"ref\",\"value\":[\"person\",\"1\"]}," +
+                    "\"1\":{\"$t\":\"ref\",\"value\":[\"person\",\"2\"]}}}}," +
+                    "\"person\":{" +
+                    "\"1\":{\"name\":{\"$t\":\"atom\",\"value\":\"Jason Bateman\"}}," +
+                    "\"2\":{\"name\":{\"$t\":\"atom\",\"value\":\"Laura Linney\"}}}}}",
+            ),
+        )
+        val details = api.getDetails("80117552", "NetflixId=x", ProviderRef(ProviderId.NETFLIX, "80117552", null))
+        assertEquals("A planner launders money.", details?.synopsis)
+        assertEquals(2017, details?.year)
+        assertEquals(listOf("Jason Bateman", "Laura Linney"), details?.cast)
+        assertTrue(server.takeRequest().path!!.contains("/browse"))
+        assertTrue(server.takeRequest().path!!.contains("/metadata?movieid=80117552"))
+        val castPost = server.takeRequest()
+        assertTrue(castPost.path!!.contains("/pathEvaluator"))
+        assertTrue(castPost.body.readUtf8().contains("\"cast\""))
     }
 
     @Test fun notLoggedIn_throwsAuthError() {
