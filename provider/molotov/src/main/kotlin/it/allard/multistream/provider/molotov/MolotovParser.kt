@@ -84,6 +84,9 @@ object MolotovParser {
 
     private fun isPortrait(url: String): Boolean {
         val match = IMAGE_SIZE.find(url) ?: return false
-        return match.groupValues[2].toInt() > match.groupValues[1].toInt()
+        // toLongOrNull: the regex allows arbitrarily long digit runs that would overflow toInt().
+        val width = match.groupValues[1].toLongOrNull() ?: return false
+        val height = match.groupValues[2].toLongOrNull() ?: return false
+        return height > width
     }
 }

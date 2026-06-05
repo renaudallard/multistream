@@ -62,6 +62,19 @@ class MolotovApiTest {
         assertEquals(MediaType.MOVIE, results.first { it.title == "OSS 117" }.type)
     }
 
+    @Test fun search_doesNotCrashOnOversizedImageDimensions() = runBlocking {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"sections":[{"items":[
+                  {"type":"program","id":"p1","slug":"x","title":"X","image_bundle":{"poster":{"url":"https://img/99999999999x1/x.jpg"}}}
+                ]}]}""".trimIndent(),
+            ),
+        )
+        val results = api.search("x", "AT", Region.FR)
+        assertEquals(1, results.size) // an oversized WxH must not throw and abort the result list
+        assertEquals("https://img/99999999999x1/x.jpg", results.first().posterUrl)
+    }
+
     @Test fun search_unauthorized_throwsAuthError() {
         server.enqueue(MockResponse().setResponseCode(401))
         try {
