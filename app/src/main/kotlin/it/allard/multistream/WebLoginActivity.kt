@@ -4,8 +4,10 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.WebStorage
 import android.webkit.WebView
@@ -24,8 +26,13 @@ import androidx.core.view.WindowInsetsCompat
  * a "Done" button lets the user finish manually if auto-detection misses.
  */
 class WebLoginActivity : ComponentActivity() {
+    private var webView: WebView? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // The user types provider credentials here, so keep the screen out of screenshots, the
+        // recents thumbnail and screen recordings.
+        window.setFlags(WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE)
         val loginUrl = intent.getStringExtra(EXTRA_LOGIN_URL).orEmpty()
         val cookieUrl = intent.getStringExtra(EXTRA_COOKIE_URL).orEmpty()
         val successCookie = intent.getStringExtra(EXTRA_SUCCESS_COOKIE).orEmpty()
@@ -38,7 +45,7 @@ class WebLoginActivity : ComponentActivity() {
 
         val cookieManager = CookieManager.getInstance()
 
-        val webView = WebView(this)
+        val webView = WebView(this).also { this.webView = it }
         cookieManager.setAcceptThirdPartyCookies(webView, true)
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
@@ -82,6 +89,16 @@ class WebLoginActivity : ComponentActivity() {
         } else {
             wipeAndLoad(cookieManager, webView, loginUrl)
         }
+    }
+
+    override fun onDestroy() {
+        webView?.apply {
+            stopLoading()
+            (parent as? ViewGroup)?.removeView(this)
+            destroy()
+        }
+        webView = null
+        super.onDestroy()
     }
 
     /**
