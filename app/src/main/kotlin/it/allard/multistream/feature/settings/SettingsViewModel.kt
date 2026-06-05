@@ -69,7 +69,7 @@ class SettingsViewModel(
             _message.value = "Enter ${provider.capabilities.loginUserLabel} and ${provider.capabilities.loginPassLabel}"
             return
         }
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val result = runCatching {
                 val secret = provider.login(email, password) ?: error("Login not supported")
                 secrets().write(provider.id, secret)
@@ -84,7 +84,7 @@ class SettingsViewModel(
     }
 
     fun loginWithCookies(provider: StreamingProvider, cookies: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val result = runCatching {
                 val secret = provider.loginWithCookies(cookies) ?: error("WebView login not supported")
                 secrets().write(provider.id, secret)
@@ -100,7 +100,7 @@ class SettingsViewModel(
 
     fun startLink(provider: StreamingProvider) {
         if (_linkPrompt.value != null) return // a link is already in progress
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             val session = runCatching { provider.beginLink() }.getOrNull()
             if (session == null) {
                 _message.value = "${provider.displayName}: linking unavailable"
@@ -120,9 +120,11 @@ class SettingsViewModel(
     }
 
     fun logout(provider: StreamingProvider) {
-        secrets().clear(provider.id)
-        _loggedIn.update { it + (provider.id to false) }
-        _message.value = "${provider.displayName}: logged out"
+        viewModelScope.launch(Dispatchers.IO) {
+            secrets().clear(provider.id)
+            _loggedIn.update { it + (provider.id to false) }
+            _message.value = "${provider.displayName}: logged out"
+        }
     }
 
     fun consumeMessage() {
