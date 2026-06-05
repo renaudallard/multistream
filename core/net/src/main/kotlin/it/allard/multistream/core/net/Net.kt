@@ -37,7 +37,10 @@ class InMemoryCookieJar : CookieJar {
     private val store = ConcurrentHashMap<String, MutableList<Cookie>>()
 
     override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
-        val list = store.getOrPut(url.host) { mutableListOf() }
+        // computeIfAbsent is atomic on a ConcurrentHashMap, so every thread shares the one list and
+        // the synchronized block below actually excludes them; Kotlin's getOrPut is not atomic and
+        // could hand two threads separate lists, losing one thread's cookies.
+        val list = store.computeIfAbsent(url.host) { mutableListOf() }
         synchronized(list) {
             cookies.forEach { cookie ->
                 list.removeAll { it.name == cookie.name }
