@@ -23,6 +23,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.cancellation.CancellationException
 
 /** One emission of a streaming search: the titles merged so far, and whether more are pending. */
 data class SearchUpdate(val results: List<Title>, val loading: Boolean)
@@ -70,7 +71,7 @@ class SearchInteractor(
         var title = getTitle(key) ?: return@withContext null
         if (title.synopsis == null || title.cast.isEmpty()) {
             title.detailProvider()?.let { (provider, ref) ->
-                runCatching { provider.getDetails(ref, configFor(provider, ref)) }.getOrNull()?.let { d ->
+                orDefault(null) { provider.getDetails(ref, configFor(provider, ref)) }?.let { d ->
                     title = title.copy(
                         // The provider detail knows movie vs series authoritatively (search may guess);
                         // applying it stops films being sent to getSeasons for a phantom episode list.
@@ -85,7 +86,7 @@ class SearchInteractor(
         }
         if (title.type == MediaType.SERIES && title.seasons.isEmpty()) {
             title.episodeProvider()?.let { (provider, ref) ->
-                val seasons = runCatching { provider.getSeasons(ref, configFor(provider, ref)) }.getOrDefault(emptyList())
+                val seasons = orDefault(emptyList()) { provider.getSeasons(ref, configFor(provider, ref)) }
                 if (seasons.isNotEmpty()) title = title.copy(seasons = seasons)
             }
         }
@@ -109,6 +110,16 @@ class SearchInteractor(
             persistSecrets = { secrets.write(provider.id, it) },
         )
     }
+
+    /** Run an enrichment call, degrading to [default] on failure but letting cancellation propagate. */
+    private suspend fun <T> orDefault(default: T, block: suspend () -> T): T =
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            default
+        }
 
     private suspend fun ProducerScope<SearchUpdate>.emit(query: String, results: List<UnifiedSearchResult>, loading: Boolean) {
         send(SearchUpdate(mergeAndIndex(query, synchronized(results) { results.toList() }), loading))

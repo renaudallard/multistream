@@ -16,6 +16,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import kotlin.coroutines.cancellation.CancellationException
 
 class NetflixApiException(message: String, val authError: Boolean = false) : Exception(message)
 
@@ -104,7 +105,7 @@ class NetflixApi(
             .filter { normQuery.isBlank() || normalizeTitle(it.title).contains(normQuery) }
         // Boxart isn't materialized through the search reference path, so fetch it for the matched ids
         // in a second pathEvaluator call (this is what the reference client does) and attach posters.
-        val posters = runCatching { fetchBoxarts(current, matched.map { it.ref.providerTitleId }) }.getOrDefault(emptyMap())
+        val posters = orDefault(emptyMap()) { fetchBoxarts(current, matched.map { it.ref.providerTitleId }) }
         return matched.map { result -> posters[result.ref.providerTitleId]?.let { result.copy(posterUrl = it) } ?: result }
     }
 
@@ -116,9 +117,19 @@ class NetflixApi(
     private suspend fun doGetDetails(videoId: String, ref: ProviderRef): ProviderTitleDetails? {
         val current = session ?: prepareSession().also { session = it }
         val metadata = exec(metadataRequest(current, videoId))
-        val cast = runCatching { fetchCast(current, videoId) }.getOrDefault(emptyList())
+        val cast = orDefault(emptyList()) { fetchCast(current, videoId) }
         return NetflixParser.parseDetails(metadata, cast, ref)
     }
+
+    /** Run an optional secondary fetch, returning [default] on failure but letting cancellation through. */
+    private suspend fun <T> orDefault(default: T, block: suspend () -> T): T =
+        try {
+            block()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            default
+        }
 
     /** Resolve poster art for the matched ids: videos[ids].boxarts[size].jpg -> a url. */
     private suspend fun fetchBoxarts(current: Session, ids: List<String>): Map<String, String> {
