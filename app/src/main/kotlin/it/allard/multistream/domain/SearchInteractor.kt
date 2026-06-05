@@ -13,10 +13,13 @@ import it.allard.multistream.core.model.rankByRelevance
 import it.allard.multistream.di.ProviderRegistry
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
@@ -54,7 +57,7 @@ class SearchInteractor(
                 send(SearchUpdate(mergeAndIndex(query, snapshot), loading = stillLoading))
             }
         }
-    }
+    }.flowOn(Dispatchers.IO)
 
     /** Resolve a title from the sample catalog or the last search results. */
     suspend fun getTitle(key: TitleKey): Title? = SampleCatalog.byKey(key) ?: index[key.serialize()]
@@ -63,8 +66,8 @@ class SearchInteractor(
      * Resolve a title and enrich it from the providers: synopsis/cast/date from the best
      * detail-capable provider, and (for a series with none) its seasons from the best episode provider.
      */
-    suspend fun loadDetails(key: TitleKey): Title? {
-        var title = getTitle(key) ?: return null
+    suspend fun loadDetails(key: TitleKey): Title? = withContext(Dispatchers.IO) {
+        var title = getTitle(key) ?: return@withContext null
         if (title.synopsis == null || title.cast.isEmpty()) {
             title.detailProvider()?.let { (provider, ref) ->
                 runCatching { provider.getDetails(ref, configFor(provider, ref)) }.getOrNull()?.let { d ->
@@ -86,7 +89,7 @@ class SearchInteractor(
                 if (seasons.isNotEmpty()) title = title.copy(seasons = seasons)
             }
         }
-        return title
+        title
     }
 
     private fun Title.detailProvider(): Pair<StreamingProvider, ProviderRef>? =
