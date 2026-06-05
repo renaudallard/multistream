@@ -43,7 +43,9 @@ class SettingsViewModel(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
-            _loggedIn.value = registry.providers.associate { it.id to !secrets().read(it.id).isEmpty }
+            val initial = registry.providers.associate { it.id to !secrets().read(it.id).isEmpty }
+            // Merge under any login/logout that landed while we were reading, so we don't revert it.
+            _loggedIn.update { current -> initial + current }
         }
     }
 
