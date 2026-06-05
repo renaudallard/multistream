@@ -11,6 +11,7 @@ import it.allard.multistream.core.net.buildClient
 import it.allard.multistream.core.net.int
 import it.allard.multistream.core.net.obj
 import kotlinx.serialization.json.JsonObject
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
@@ -56,9 +57,15 @@ class RtlApi(
     }
 
     private suspend fun detail3(detailId: String, seasonIndex: Int?): JsonObject? {
-        val url = "$baseUrl/RTL_PLAY/detail3/$detailId" +
-            if (seasonIndex != null) "?selectedSeasonIndex=$seasonIndex" else ""
-        client.await(get(url)).use { response ->
+        // detailId comes from search results, so encode it as a path segment rather than splicing it
+        // into the URL string, where a stray / or ? would alter the request path.
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("RTL_PLAY")
+            .addPathSegment("detail3")
+            .addPathSegment(detailId)
+            .apply { if (seasonIndex != null) addQueryParameter("selectedSeasonIndex", seasonIndex.toString()) }
+            .build()
+        client.await(get(url.toString())).use { response ->
             if (!response.isSuccessful) return null
             return NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
         }
