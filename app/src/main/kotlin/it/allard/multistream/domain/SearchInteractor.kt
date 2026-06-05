@@ -46,11 +46,12 @@ class SearchInteractor(
         for (provider in providers) {
             launch {
                 val results = runProviderSearch(provider, query)
-                val snapshot = synchronized(accumulated) {
-                    accumulated.addAll(results)
-                    accumulated.toList()
-                }
-                send(SearchUpdate(mergeAndIndex(query, snapshot), loading = remaining.decrementAndGet() > 0))
+                synchronized(accumulated) { accumulated.addAll(results) }
+                // Decide loading first, then snapshot: the last provider to finish (loading=false) then
+                // observes every other provider's results, so the final emission can't drop any.
+                val stillLoading = remaining.decrementAndGet() > 0
+                val snapshot = synchronized(accumulated) { accumulated.toList() }
+                send(SearchUpdate(mergeAndIndex(query, snapshot), loading = stillLoading))
             }
         }
     }
