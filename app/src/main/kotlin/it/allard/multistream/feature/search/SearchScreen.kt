@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -26,6 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -51,6 +55,15 @@ fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
         }
     }
 
+    val listState = rememberLazyListState()
+    var wasLoading by remember { mutableStateOf(false) }
+    // When a search finishes ranking, jump back to the top so the most relevant results are in view.
+    // Tracking the loading edge keeps a plain return to this screen from resetting the scroll position.
+    LaunchedEffect(state.loading) {
+        if (wasLoading && !state.loading) listState.scrollToItem(0)
+        wasLoading = state.loading
+    }
+
     Column(Modifier.fillMaxSize().padding(16.dp)) {
         OutlinedTextField(
             value = state.query,
@@ -71,7 +84,7 @@ fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))
         }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(state.results, key = { it.key.serialize() }) { title ->
                 TitleCard(title) { onOpenTitle(title.key) }
             }
