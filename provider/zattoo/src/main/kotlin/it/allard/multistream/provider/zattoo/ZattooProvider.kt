@@ -52,6 +52,17 @@ class ZattooProvider(
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        return try {
+            api.search(query, region)
+        } catch (e: ZattooApiException) {
+            if (e.authError) retryAfterAuth(query, region, config) else emptyList()
+        }
+    }
+
+    /** The session expired server-side: drop it, re-login from stored credentials and search once more. */
+    private suspend fun retryAfterAuth(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        api.invalidateSession()
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
         return runCatching { api.search(query, region) }.getOrDefault(emptyList())
     }
 

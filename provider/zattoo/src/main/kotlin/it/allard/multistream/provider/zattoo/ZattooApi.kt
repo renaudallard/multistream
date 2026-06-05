@@ -16,7 +16,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.UUID
 
-class ZattooApiException(message: String) : Exception(message)
+class ZattooApiException(message: String, val authError: Boolean = false) : Exception(message)
 
 /**
  * Zattoo zapi client, modeled on the maintained Kodi pvr.zattoo addon. The flow is:
@@ -37,6 +37,12 @@ class ZattooApi(
     private var loggedIn = false
 
     fun isLoggedIn(): Boolean = loggedIn && powerHash != null
+
+    /** Drop the local session so the next ensureSession re-logs in after a server-side expiry. */
+    fun invalidateSession() {
+        loggedIn = false
+        powerHash = null
+    }
 
     suspend fun login(email: String, password: String) {
         val appToken = loadAppToken()
@@ -106,6 +112,7 @@ class ZattooApi(
     private suspend fun execElement(request: Request): JsonElement {
         client.await(request).use { response ->
             val text = response.body?.string().orEmpty()
+            if (response.code == 401 || response.code == 403) throw ZattooApiException("Unauthorized", authError = true)
             if (!response.isSuccessful) throw ZattooApiException("HTTP ${response.code}")
             return NetJson.parseToJsonElement(text)
         }
