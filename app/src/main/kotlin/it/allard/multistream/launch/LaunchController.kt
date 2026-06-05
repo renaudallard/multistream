@@ -8,35 +8,42 @@ import it.allard.multistream.provider.api.LaunchAction
 import it.allard.multistream.provider.api.LaunchResolver
 import it.allard.multistream.provider.api.Launcher
 import it.allard.multistream.provider.api.StreamingProvider
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Resolves and fires launch intents, returning a short user-facing status message. */
 class LaunchController(context: Context) {
     private val appContext = context.applicationContext
 
-    fun launchTitle(
+    // Intent resolution queries the PackageManager (binder IPC) and startActivity itself is not free,
+    // so run them off the main thread; every intent carries FLAG_ACTIVITY_NEW_TASK and so can start
+    // from a background thread.
+    suspend fun launchTitle(
         provider: StreamingProvider,
         ref: ProviderRef,
         episode: EpisodeCoord? = null,
         query: String? = null,
-    ): String = when (val action = LaunchResolver.resolve(appContext, provider, ref, episode, query)) {
-        is LaunchAction.Start ->
-            if (startSafely(action.intent)) "Opening ${provider.displayName}…" else "Couldn't open ${provider.displayName}"
-        is LaunchAction.Install -> {
-            openStore(action.packageName)
-            "${provider.displayName} isn't installed"
+    ): String = withContext(Dispatchers.IO) {
+        when (val action = LaunchResolver.resolve(appContext, provider, ref, episode, query)) {
+            is LaunchAction.Start ->
+                if (startSafely(action.intent)) "Opening ${provider.displayName}…" else "Couldn't open ${provider.displayName}"
+            is LaunchAction.Install -> {
+                openStore(action.packageName)
+                "${provider.displayName} isn't installed"
+            }
+            LaunchAction.Unavailable -> "Couldn't open ${provider.displayName}"
         }
-        LaunchAction.Unavailable -> "Couldn't open ${provider.displayName}"
     }
 
     /** Open the provider's app, optionally pre-loading a search query inside it. */
-    fun openApp(provider: StreamingProvider, query: String? = null): String {
+    suspend fun openApp(provider: StreamingProvider, query: String? = null): String = withContext(Dispatchers.IO) {
         if (!Launcher.isInstalled(appContext, provider.packageName)) {
             openStore(provider.packageName)
-            return "${provider.displayName} isn't installed"
+            return@withContext "${provider.displayName} isn't installed"
         }
         val intent = provider.launchAppFallback(appContext, query)
             ?: Launcher.launchApp(appContext, provider.packageName)
-        return if (intent != null && startSafely(intent)) {
+        if (intent != null && startSafely(intent)) {
             "Opening ${provider.displayName}…"
         } else {
             "Couldn't open ${provider.displayName}"

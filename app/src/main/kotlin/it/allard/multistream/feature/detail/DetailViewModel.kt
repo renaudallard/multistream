@@ -78,7 +78,10 @@ class DetailViewModel(
     fun launch(availability: Availability, episode: EpisodeCoord? = null) {
         val provider = registry.get(availability.provider) ?: return
         val targetEpisode = episode?.takeIf { provider.capabilities.canDeepLinkToEpisode }
-        _state.update { it.copy(message = launchController.launchTitle(provider, availability.ref, targetEpisode)) }
+        viewModelScope.launch {
+            val message = launchController.launchTitle(provider, availability.ref, targetEpisode)
+            _state.update { it.copy(message = message) }
+        }
     }
 
     fun resume() {

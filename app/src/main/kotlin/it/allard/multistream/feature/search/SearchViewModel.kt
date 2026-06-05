@@ -50,8 +50,10 @@ class SearchViewModel(
     }
 
     fun openInApp(provider: StreamingProvider) {
-        val message = launchController.openApp(provider, _state.value.query.trim())
-        _state.update { it.copy(message = message) }
+        viewModelScope.launch {
+            val message = launchController.openApp(provider, _state.value.query.trim())
+            _state.update { it.copy(message = message) }
+        }
     }
 
     fun consumeMessage() = _state.update { it.copy(message = null) }
