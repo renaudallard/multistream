@@ -1,6 +1,5 @@
 package it.allard.multistream.launch
 
-import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
@@ -47,7 +46,11 @@ class LaunchController(context: Context) {
     private fun startSafely(intent: Intent): Boolean = try {
         appContext.startActivity(intent)
         true
-    } catch (e: ActivityNotFoundException) {
+    } catch (e: RuntimeException) {
+        // A cross-app launch can fail several ways: no handler (ActivityNotFoundException), a target
+        // that is not exported or needs a permission (SecurityException), or a malformed target
+        // (IllegalArgumentException). Treat them all as a failed launch so the caller reports
+        // "Couldn't open" instead of crashing.
         false
     }
 
