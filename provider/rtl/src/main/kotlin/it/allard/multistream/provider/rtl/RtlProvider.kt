@@ -6,7 +6,9 @@ import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
+import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.Launcher
 import it.allard.multistream.provider.api.ProviderCapabilities
@@ -29,6 +31,8 @@ class RtlProvider(
     override val packageName = "com.tapptic.rtl.tvi"
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canGetDetails = true,
+        canListEpisodes = true,
         canDeepLinkToTitle = true,
         canInAppSearchDeepLink = true,
         requiresAuth = false,
@@ -39,6 +43,12 @@ class RtlProvider(
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
         runCatching { api.search(query, region) }.getOrDefault(emptyList())
+
+    override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? =
+        runCatching { api.getDetails(ref.providerTitleId, ref) }.getOrNull()
+
+    override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> =
+        runCatching { api.getSeasons(ref.providerTitleId) }.getOrDefault(emptyList())
 
     override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
         loginUrl = "https://sso.rtl.be/",

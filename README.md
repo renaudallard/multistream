@@ -60,7 +60,7 @@ shell for phone and Android TV.
 | **Arte** | ✅ | title page | summary | optional | free public API; the region selects the catalog language |
 | **Plex** | ✅ | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
 | **RTBF Auvio** | ✅ | title page | — | optional | free public API |
-| **RTL Play** | ✅ | title page | — | optional | catalog search via DPG Media's lfvp API (anonymous, but Belgium-only); needs a Belgian connection |
+| **RTL Play** | ✅ | title page | cast, summary | optional | catalog search and details via DPG Media's lfvp API (anonymous, but Belgium-only); needs a Belgian connection |
 | **Play RTS** | ✅ | video page | — | optional | free SRG SSR Integration Layer; video results only |
 
 `✅ Search` = a real catalog query from this app. `\*` = login is required for that provider's
