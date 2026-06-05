@@ -18,7 +18,7 @@ import kotlinx.serialization.json.JsonPrimitive
  * carrying a title plus a title identifier (gti/titleID/asin) is treated as a result.
  */
 object PrimeParser {
-    private val TEMPLATE = Regex("<script[^>]*type=\"text/template\"[^>]*>(.*?)</script>", RegexOption.DOT_MATCHES_ALL)
+    private const val SCRIPT_CLOSE = "</script>"
     private val ID_KEYS = listOf("titleID", "titleId", "gti", "asin")
 
     // Cap recursion depth: the search response is untrusted web JSON, and a deeply nested document
@@ -32,11 +32,35 @@ object PrimeParser {
         runCatching { NetJson.parseToJsonElement(html) }.getOrNull()?.let { collect(it, region, out) }
         // Fall back to the older embedded text/template blocks if the JSON form yielded nothing.
         if (out.isEmpty()) {
-            for (match in TEMPLATE.findAll(html)) {
-                runCatching { NetJson.parseToJsonElement(match.groupValues[1]) }.getOrNull()?.let { collect(it, region, out) }
+            for (block in templateBlocks(html)) {
+                runCatching { NetJson.parseToJsonElement(block) }.getOrNull()?.let { collect(it, region, out) }
             }
         }
         return out.values.toList()
+    }
+
+    /**
+     * Extract the body of each `<script type="text/template">` block with a single linear scan.
+     * A regex with a lazy `(.*?)</script>` backtracks catastrophically on un-terminated openers (a
+     * Prime captcha or error page with no closing tag), so this walks indexOf boundaries instead and
+     * stops as soon as no further closing tag exists.
+     */
+    private fun templateBlocks(html: String): List<String> {
+        val blocks = ArrayList<String>()
+        var i = 0
+        while (true) {
+            val tagStart = html.indexOf("<script", i, ignoreCase = true)
+            if (tagStart < 0) break
+            val tagEnd = html.indexOf('>', tagStart)
+            if (tagEnd < 0) break
+            val close = html.indexOf(SCRIPT_CLOSE, tagEnd + 1, ignoreCase = true)
+            if (close < 0) break
+            if (html.substring(tagStart, tagEnd + 1).contains("type=\"text/template\"", ignoreCase = true)) {
+                blocks.add(html.substring(tagEnd + 1, close))
+            }
+            i = close + SCRIPT_CLOSE.length
+        }
+        return blocks
     }
 
     private fun collect(element: JsonElement, region: Region, out: MutableMap<String, UnifiedSearchResult>, depth: Int = 0) {
