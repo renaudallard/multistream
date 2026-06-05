@@ -58,6 +58,8 @@ class ZattooApiTest {
         assertTrue(results.any { it.title == "Tatort Wien" })
         // http image URL is upgraded to https (Android blocks cleartext)
         assertEquals("https://images.zattic.com/cms/abc/format_480x360.jpg", results.first { it.title == "Tatort" }.posterUrl)
+        // deep link points at the program's live channel
+        assertEquals("https://zattoo.com/live/sf1", results.first { it.title == "Tatort" }.ref.deepLinkHint)
 
         // token.json fetched the app token; hello carried it
         assertTrue(server.takeRequest().path!!.contains("/token.json"))

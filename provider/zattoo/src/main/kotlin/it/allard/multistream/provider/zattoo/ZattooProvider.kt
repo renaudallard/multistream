@@ -15,8 +15,8 @@ import it.allard.multistream.provider.api.SessionState
 import it.allard.multistream.provider.api.StreamingProvider
 
 /**
- * Zattoo (DACH live TV + replay). Search runs over the zapi program guide. Title-level deep links
- * are not exposed by the app manifest, so launch opens the app (search still works).
+ * Zattoo (DACH live TV + replay). Search runs over the zapi program guide. Launch deep-links to the
+ * program's live channel (zattoo.com/live/<cid>), which the app handles directly.
  */
 class ZattooProvider(
     private val api: ZattooApi = ZattooApi(),
@@ -26,7 +26,7 @@ class ZattooProvider(
     override val packageName = "com.zattoo.player"
     override val capabilities = ProviderCapabilities(
         canSearch = true,
-        canDeepLinkToTitle = false,
+        canDeepLinkToTitle = true,
         isLiveTv = true,
         requiresRegion = true,
         requiresAuth = true,

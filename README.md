@@ -56,7 +56,7 @@ shell for phone and Android TV.
 | **Disney+** | ✅ | title page | cast, summary | email / password | needs live verification with your account |
 | **Prime Video** | ✅ | detail page | summary | WebView \* | best-effort and unverified; TV build is bundled, the mobile package is tried on phones |
 | **Molotov** | ✅ | deep link | summary | email / password | rich title and program deep links; needs live verification |
-| **Zattoo** | ✅ | opens app | — | email / password | the manifest carries no title path yet, so launch opens the app |
+| **Zattoo** | ✅ | live channel | — | email / password | deep-links to the program's live channel (`zattoo.com/live/<cid>`); the guide carries no synopsis |
 | **Arte** | ✅ | title page | summary | optional | free public API; the region selects the catalog language |
 | **Plex** | ✅ | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
 | **RTBF Auvio** | ✅ | title page | — | optional | free public API |
@@ -103,8 +103,8 @@ the **title page** and the user presses play inside the official app.
 - **Prime Video** `https://app.primevideo.com/detail?gti=<ASIN>`. The bundled APK is the TV
   ("living-room") build; on phones the mobile package `com.amazon.avod.thirdpartyclient` is tried.
 - **Molotov** `molotov://` and `app.molotov.tv` app links, carried as a deep-link hint.
-- **Zattoo** the manifest exposes only `zattoo://zattoo.com` with no title path, so launch opens the
-  app; title-level deep links are deferred until reverse-engineered.
+- **Zattoo** `https://zattoo.com/live/<cid>` opens the program's live channel (the app catches every
+  `zattoo.com` URL; the `/live` route comes from its bundle).
 - **Arte** `https://www.arte.tv/<lang>/videos/<id>/`, with `arte://collection/<id>` as a fallback.
 - **Plex** `https://watch.plex.tv/<movie|show>/<slug>` for Discover hits; server-library hits have no
   public slug and open the Plex app.

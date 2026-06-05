@@ -41,7 +41,7 @@ object ZattooParser {
                     key,
                     UnifiedSearchResult(
                         provider = ProviderId.ZATTOO,
-                        ref = ProviderRef(ProviderId.ZATTOO, key, deepLinkHint = null, region = region),
+                        ref = ProviderRef(ProviderId.ZATTOO, key, deepLinkHint = "https://zattoo.com/live/$cid", region = region),
                         title = title,
                         type = MediaType.LIVE_PROGRAM,
                         posterUrl = programImage(programObj),
