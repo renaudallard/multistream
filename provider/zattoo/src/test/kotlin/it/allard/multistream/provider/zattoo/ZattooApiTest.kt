@@ -38,7 +38,7 @@ class ZattooApiTest {
                 """
                 {"success":true,"channels":[
                   {"cid":"sf1","programs":[
-                    {"id":1001,"t":"Tatort","s":1700000000,"e":1700005400},
+                    {"id":1001,"t":"Tatort","s":1700000000,"e":1700005400,"i_url":"http://images.zattic.com/cms/abc/format_480x360.jpg"},
                     {"id":1002,"t":"Tagesschau","s":1700005400,"e":1700007200}
                   ]},
                   {"cid":"zdf","programs":[{"id":2001,"t":"Tatort Wien","s":1700000000,"e":1700005400}]}
@@ -56,6 +56,8 @@ class ZattooApiTest {
         assertTrue(results.all { it.type == MediaType.LIVE_PROGRAM })
         assertTrue(results.any { it.title == "Tatort" })
         assertTrue(results.any { it.title == "Tatort Wien" })
+        // http image URL is upgraded to https (Android blocks cleartext)
+        assertEquals("https://images.zattic.com/cms/abc/format_480x360.jpg", results.first { it.title == "Tatort" }.posterUrl)
 
         // token.json fetched the app token; hello carried it
         assertTrue(server.takeRequest().path!!.contains("/token.json"))
