@@ -54,7 +54,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen() {
     val graph = LocalAppGraph.current
-    val viewModel = appViewModel { SettingsViewModel(graph.registry, graph.settings, graph.secrets) }
+    val viewModel = appViewModel { SettingsViewModel(graph.registry, graph.settings) { graph.secrets } }
     val rows by viewModel.rows.collectAsState()
     val loggedIn by viewModel.loggedIn.collectAsState()
     val linkPrompt by viewModel.linkPrompt.collectAsState()

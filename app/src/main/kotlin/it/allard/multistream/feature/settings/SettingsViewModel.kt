@@ -8,6 +8,7 @@ import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.di.ProviderRegistry
 import it.allard.multistream.provider.api.StreamingProvider
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -20,7 +21,9 @@ import kotlinx.coroutines.launch
 class SettingsViewModel(
     private val registry: ProviderRegistry,
     private val settings: SettingsRepository,
-    private val secrets: SecretStore,
+    // A lazy accessor: resolving it builds the Keystore-backed store, which must not run on the main
+    // thread, so the first touch happens inside the IO coroutine below.
+    private val secrets: () -> SecretStore,
 ) : ViewModel() {
 
     data class Row(val provider: StreamingProvider, val enabled: Boolean, val region: Region?)
@@ -35,10 +38,14 @@ class SettingsViewModel(
         ) { it.toList() }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    private val _loggedIn = MutableStateFlow(
-        registry.providers.associate { it.id to !secrets.read(it.id).isEmpty },
-    )
+    private val _loggedIn = MutableStateFlow<Map<ProviderId, Boolean>>(emptyMap())
     val loggedIn: StateFlow<Map<ProviderId, Boolean>> = _loggedIn.asStateFlow()
+
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            _loggedIn.value = registry.providers.associate { it.id to !secrets().read(it.id).isEmpty }
+        }
+    }
 
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
@@ -65,7 +72,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             val result = runCatching {
                 val secret = provider.login(email, password) ?: error("Login not supported")
-                secrets.write(provider.id, secret)
+                secrets().write(provider.id, secret)
             }
             if (result.isSuccess) {
                 _loggedIn.update { it + (provider.id to true) }
@@ -80,7 +87,7 @@ class SettingsViewModel(
         viewModelScope.launch {
             val result = runCatching {
                 val secret = provider.loginWithCookies(cookies) ?: error("WebView login not supported")
-                secrets.write(provider.id, secret)
+                secrets().write(provider.id, secret)
             }
             if (result.isSuccess) {
                 _loggedIn.update { it + (provider.id to true) }
@@ -103,7 +110,7 @@ class SettingsViewModel(
             val secret = runCatching { session.awaitToken() }.getOrNull()
             _linkPrompt.value = null
             if (secret != null) {
-                secrets.write(provider.id, secret)
+                secrets().write(provider.id, secret)
                 _loggedIn.update { it + (provider.id to true) }
                 _message.value = "${provider.displayName}: linked"
             } else {
@@ -113,7 +120,7 @@ class SettingsViewModel(
     }
 
     fun logout(provider: StreamingProvider) {
-        secrets.clear(provider.id)
+        secrets().clear(provider.id)
         _loggedIn.update { it + (provider.id to false) }
         _message.value = "${provider.displayName}: logged out"
     }
