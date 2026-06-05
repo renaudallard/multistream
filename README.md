@@ -55,9 +55,9 @@ shell for phone and Android TV.
 | Service | Search | Launch | Details | Login | Notes |
 |---|:--:|:--:|:--:|:--:|---|
 | **Netflix** | ✅ | title page | cast, summary | WebView \* | title and in-app-search deep links; search verified on a real device, the session can need a fresh login after heavy use |
-| **Disney+** | ✅ | title page | cast, summary | email / password | needs live verification with your account |
-| **Prime Video** | ✅ | detail page | summary | WebView \* | best-effort and unverified; TV build is bundled, the mobile package is tried on phones |
-| **Molotov** | ✅ | deep link | summary | email / password | rich title and program deep links; needs live verification |
+| **Disney+** | ✅ | title page | cast, summary | email / password | verified on a real device; films and series are typed correctly, so episodes list only for series |
+| **Prime Video** | ✅ | detail page | summary | WebView \* | verified on a real device; the TV build is bundled and the mobile package is tried on phones; web-search art is 16:9 (no portrait) |
+| **Molotov** | ✅ | deep link | summary | email / password | verified on a real device; rich title and program deep links; its API carries no cast |
 | **Zattoo** | ✅ | live channel | — | email / password | deep-links to the program's live channel (`zattoo.com/live/<cid>`); the guide carries no synopsis |
 | **Arte** | ✅ | title page | summary | optional | free public API; the region selects the catalog language |
 | **Plex** | ✅ | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
@@ -70,8 +70,8 @@ search. Everything else searches without a login. `Details` = what the title scr
 open a result: a plot summary, and the billed cast where the service exposes it (a release year
 shows wherever search returns one); `—` providers show the poster, title and year only.
 
-A small built-in sample catalog ships so the flow is demonstrable offline; remove it once live
-search is confirmed. Search runs only on a device with network.
+Live search is verified on a real device across all ten services. A small built-in sample catalog
+also ships for an offline demo; live search itself runs only on a device with network.
 
 ## Login
 
