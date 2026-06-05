@@ -63,6 +63,18 @@ class ReconcileTest {
         assertEquals(1, merged.size)
     }
 
+    @Test fun consecutive_years_do_not_chain_past_the_tolerance() {
+        val merged = mergeResults(
+            listOf(
+                result(ProviderId.NETFLIX, "Solaris", 2019, MediaType.MOVIE),
+                result(ProviderId.PRIME, "Solaris", 2020, MediaType.MOVIE),
+                result(ProviderId.DISNEY, "Solaris", 2021, MediaType.MOVIE),
+            )
+        )
+        // 2019 and 2020 merge against the 2019 anchor; 2021 is two years off it and stays separate.
+        assertEquals(2, merged.size)
+    }
+
     @Test fun movie_and_series_with_same_title_do_not_merge() {
         val merged = mergeResults(
             listOf(

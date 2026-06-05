@@ -153,14 +153,16 @@ private fun levenshtein(a: String, b: String): Int {
     return prev[b.length]
 }
 
-/** Split rows that share (type, normTitle) into clusters whose years are within 1 of each other. */
+/** Split rows that share (type, normTitle) into clusters spanning at most 1 year from their anchor. */
 private fun clusterByYear(members: List<UnifiedSearchResult>): List<List<UnifiedSearchResult>> {
     val withYear = members.filter { it.year != null }.sortedBy { it.year }
     val noYear = members.filter { it.year == null }
     val clusters = mutableListOf<MutableList<UnifiedSearchResult>>()
     for (r in withYear) {
+        // Compare to the cluster's first (earliest) year, not the last added one: comparing to the
+        // last member would let 2019->2020->2021 chain into one cluster spanning two years.
         val current = clusters.lastOrNull()
-        if (current != null && abs(r.year!! - current.last().year!!) <= 1) current.add(r)
+        if (current != null && abs(r.year!! - current.first().year!!) <= 1) current.add(r)
         else clusters.add(mutableListOf(r))
     }
     if (noYear.isNotEmpty()) {
