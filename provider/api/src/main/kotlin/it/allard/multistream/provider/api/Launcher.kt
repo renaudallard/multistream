@@ -46,7 +46,7 @@ object Launcher {
 /** What the caller should do to honor a launch request. */
 sealed interface LaunchAction {
     data class Start(val intent: Intent) : LaunchAction
-    data class Install(val packageName: String, val intent: Intent) : LaunchAction
+    data class Install(val packageName: String) : LaunchAction
     data object Unavailable : LaunchAction
 }
 
@@ -66,8 +66,7 @@ object LaunchResolver {
         // as installed if any is present, and only offer the Play Store when none is.
         val installedPkg = provider.launchPackages.firstOrNull { Launcher.isInstalled(context, it) }
         if (installedPkg == null) {
-            val target = provider.launchPackages.first()
-            return LaunchAction.Install(target, Launcher.playStoreIntent(target))
+            return LaunchAction.Install(provider.launchPackages.first())
         }
         provider.buildLaunchIntent(context, ref, episode)?.let { return LaunchAction.Start(it) }
         if (episode != null) {
