@@ -108,6 +108,7 @@ fun SettingsScreen() {
                             linkLogin = row.provider.capabilities.linkLogin,
                             linkPrompt = linkPrompt?.takeIf { it.providerId == row.provider.id },
                             onStartLink = { viewModel.startLink(row.provider) },
+                            onCancelLink = { viewModel.cancelLink() },
                             onLogin = { email, password -> viewModel.login(row.provider, email, password) },
                             onWebCookies = { cookies -> viewModel.loginWithCookies(row.provider, cookies) },
                             onLogout = { viewModel.logout(row.provider) },
@@ -141,6 +142,7 @@ private fun LoginSection(
     linkLogin: Boolean = false,
     linkPrompt: SettingsViewModel.LinkPrompt? = null,
     onStartLink: () -> Unit = {},
+    onCancelLink: () -> Unit = {},
     onLogin: (String, String) -> Unit,
     onWebCookies: (String) -> Unit,
     onLogout: () -> Unit,
@@ -166,6 +168,8 @@ private fun LoginSection(
             }
             Spacer(Modifier.height(4.dp))
             Text("Waiting for you to approve…", style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.height(4.dp))
+            OutlinedButton(onClick = onCancelLink) { Text("Cancel") }
         } else {
             Button(onClick = onStartLink) { Text("Link account") }
         }

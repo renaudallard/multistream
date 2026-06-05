@@ -9,6 +9,7 @@ import it.allard.multistream.core.model.Region
 import it.allard.multistream.di.ProviderRegistry
 import it.allard.multistream.provider.api.StreamingProvider
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.coroutines.cancellation.CancellationException
 
 class SettingsViewModel(
     private val registry: ProviderRegistry,
@@ -57,6 +59,7 @@ class SettingsViewModel(
 
     private val _linkPrompt = MutableStateFlow<LinkPrompt?>(null)
     val linkPrompt: StateFlow<LinkPrompt?> = _linkPrompt.asStateFlow()
+    private var linkJob: Job? = null
 
     fun setEnabled(provider: StreamingProvider, enabled: Boolean) {
         viewModelScope.launch { settings.setEnabled(provider.id, enabled) }
@@ -101,15 +104,24 @@ class SettingsViewModel(
     }
 
     fun startLink(provider: StreamingProvider) {
-        if (_linkPrompt.value != null) return // a link is already in progress
-        viewModelScope.launch(Dispatchers.IO) {
+        if (linkJob?.isActive == true || _linkPrompt.value != null) {
+            _message.value = "Finish the current linking first"
+            return
+        }
+        linkJob = viewModelScope.launch(Dispatchers.IO) {
             val session = runCatching { provider.beginLink() }.getOrNull()
             if (session == null) {
                 _message.value = "${provider.displayName}: linking unavailable"
                 return@launch
             }
             _linkPrompt.value = LinkPrompt(provider.id, session.code, session.verificationUrl)
-            val secret = runCatching { session.awaitToken() }.getOrNull()
+            val secret = try {
+                session.awaitToken()
+            } catch (e: CancellationException) {
+                throw e // the user cancelled: stop the poll instead of reporting a timeout
+            } catch (e: Exception) {
+                null
+            }
             _linkPrompt.value = null
             if (secret != null) {
                 secrets().write(provider.id, secret)
@@ -119,6 +131,13 @@ class SettingsViewModel(
                 _message.value = "${provider.displayName}: linking timed out — try again"
             }
         }
+    }
+
+    /** Abandon a device link in progress so its poll stops (the user dismissed the code prompt). */
+    fun cancelLink() {
+        linkJob?.cancel()
+        linkJob = null
+        _linkPrompt.value = null
     }
 
     fun logout(provider: StreamingProvider) {
