@@ -66,8 +66,12 @@ fun mergeResults(
     val (external, heuristic) = results.partition { hasExternalId(it.externalIds) }
     groupByExternalIds(external).forEach { out += toTitle(it, providerPriority) }
 
-    heuristic.groupBy { it.type to normalizeTitle(it.title) }
+    // A title that normalizes to nothing (punctuation or non-Latin only) carries no usable key, so
+    // keep each such row as its own card rather than collapsing unrelated works into one.
+    val (unnamed, named) = heuristic.partition { normalizeTitle(it.title).isEmpty() }
+    named.groupBy { it.type to normalizeTitle(it.title) }
         .forEach { (_, members) -> clusterByYear(members).forEach { out += toTitle(it, providerPriority) } }
+    unnamed.forEach { out += toTitle(listOf(it), providerPriority) }
 
     return out
 }

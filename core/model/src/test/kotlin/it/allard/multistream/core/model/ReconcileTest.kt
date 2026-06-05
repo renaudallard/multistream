@@ -145,6 +145,16 @@ class ReconcileTest {
         assertTrue(merged.first().key is TitleKey.External)
     }
 
+    @Test fun empty_normalized_titles_do_not_collapse() {
+        val merged = mergeResults(
+            listOf(
+                result(ProviderId.NETFLIX, "!!!", 2020, MediaType.MOVIE),
+                result(ProviderId.PRIME, "???", 2020, MediaType.MOVIE),
+            )
+        )
+        assertEquals(2, merged.size)
+    }
+
     @Test fun rows_sharing_only_a_secondary_id_merge() {
         val merged = mergeResults(
             listOf(
