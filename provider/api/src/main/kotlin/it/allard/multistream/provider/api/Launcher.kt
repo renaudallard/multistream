@@ -32,8 +32,14 @@ object Launcher {
                 ?: context.packageManager.getLaunchIntentForPackage(packageName)
             )?.apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
 
+    /** Open the app's Play Store page in the Store app (`market://`). May not resolve on every device. */
     fun playStoreIntent(packageName: String): Intent =
         Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    /** The web Play Store page; a universal fallback when `market://` has no handler (a browser opens it). */
+    fun playStoreWebIntent(packageName: String): Intent =
+        Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 }
 

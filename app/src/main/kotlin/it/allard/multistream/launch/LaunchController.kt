@@ -1,6 +1,8 @@
 package it.allard.multistream.launch
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.provider.api.LaunchAction
@@ -18,12 +20,10 @@ class LaunchController(context: Context) {
         episode: EpisodeCoord? = null,
         query: String? = null,
     ): String = when (val action = LaunchResolver.resolve(appContext, provider, ref, episode, query)) {
-        is LaunchAction.Start -> {
-            appContext.startActivity(action.intent)
-            "Opening ${provider.displayName}…"
-        }
+        is LaunchAction.Start ->
+            if (startSafely(action.intent)) "Opening ${provider.displayName}…" else "Couldn't open ${provider.displayName}"
         is LaunchAction.Install -> {
-            appContext.startActivity(action.intent)
+            openStore(action.packageName)
             "${provider.displayName} isn't installed"
         }
         LaunchAction.Unavailable -> "Couldn't open ${provider.displayName}"
@@ -32,16 +32,29 @@ class LaunchController(context: Context) {
     /** Open the provider's app, optionally pre-loading a search query inside it. */
     fun openApp(provider: StreamingProvider, query: String? = null): String {
         if (!Launcher.isInstalled(appContext, provider.packageName)) {
-            appContext.startActivity(Launcher.playStoreIntent(provider.packageName))
+            openStore(provider.packageName)
             return "${provider.displayName} isn't installed"
         }
         val intent = provider.launchAppFallback(appContext, query)
             ?: Launcher.launchApp(appContext, provider.packageName)
-        return if (intent != null) {
-            appContext.startActivity(intent)
+        return if (intent != null && startSafely(intent)) {
             "Opening ${provider.displayName}…"
         } else {
             "Couldn't open ${provider.displayName}"
+        }
+    }
+
+    private fun startSafely(intent: Intent): Boolean = try {
+        appContext.startActivity(intent)
+        true
+    } catch (e: ActivityNotFoundException) {
+        false
+    }
+
+    /** Open the app's store page: the Play Store app if it resolves, otherwise the web page. */
+    private fun openStore(packageName: String) {
+        if (!startSafely(Launcher.playStoreIntent(packageName))) {
+            startSafely(Launcher.playStoreWebIntent(packageName))
         }
     }
 }
