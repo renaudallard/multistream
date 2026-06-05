@@ -83,7 +83,8 @@ Login is per-provider and never required for search except where noted above.
 - **Plex** searches anonymously. The **optional** login is Plex's device sign-in (so it works with
   two-factor accounts): tap "Link account", approve in the browser at `app.plex.tv/auth` where any
   2FA is handled, and the app keeps the account token and auto-discovers your own Plex Media Server
-  (no token to paste), searching that server with a Discover fallback.
+  over its secure (https) connection (no token to paste), searching that server with a Discover
+  fallback. A server with secure connections turned off is reached only through the Discover fallback.
 - **Arte, RTBF Auvio** search without login. An **optional** WebView login captures the site session
   and passes it to the search best-effort.
 - **RTL Play** searches without login: its lfvp catalog API is anonymous, though geo-restricted to

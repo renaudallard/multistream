@@ -86,6 +86,9 @@ class PlexApi(
             val resource = element.obj() ?: continue
             if ("server" !in (resource["provides"].string() ?: "").split(",")) continue
             val serverToken = resource["accessToken"].string() ?: continue
+            // The platform blocks cleartext (targetSdk 35), so a plain-http LAN URI fails the probe and
+            // is skipped; an https .plex.direct URI (advertised when the server's secure connections
+            // are preferred or required) connects with a valid certificate and is used instead.
             val uris = (resource["connections"].array() ?: continue).mapNotNull { it.obj() }
                 .sortedWith(compareBy({ it["relay"].bool() == true }, { it["local"].bool() != true }))
                 .mapNotNull { it["uri"].string() }
