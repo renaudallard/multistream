@@ -1,5 +1,6 @@
 package it.allard.multistream.provider.disney
 
+import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.Region
@@ -52,8 +53,8 @@ class DisneyApiTest {
         server.enqueue(
             jsonBody(
                 """{"data":{"page":{"containers":[{"items":[
-                   {"id":"e1","visuals":{"title":"Loki","metastringParts":{"releaseYearRange":{"startYear":2021}}}},
-                   {"id":"e2","visuals":{"title":"Soul"}}
+                   {"id":"e1","actions":[{"infoBlock":"dXJuOmRzOmNtcDpldmE6c2VyaWVz"}],"visuals":{"title":"Loki","metastringParts":{"releaseYearRange":{"startYear":2021}}}},
+                   {"id":"e2","actions":[{"infoBlock":"dXJuOmRzOmNtcDpldmE6bW92aWU="}],"visuals":{"title":"Soul"}}
                 ]}]}}}""",
             ),
         )
@@ -62,6 +63,9 @@ class DisneyApiTest {
         val loki = results.first { it.title == "Loki" }
         assertEquals(2021, loki.year)
         assertEquals("https://www.disneyplus.com/browse/entity-e1", loki.ref.deepLinkHint)
+        // the content type is decoded from the action infoBlock (eva:series vs eva:movie)
+        assertEquals(MediaType.SERIES, loki.type)
+        assertEquals(MediaType.MOVIE, results.first { it.title == "Soul" }.type)
     }
 
     @Test fun search_unauthorized_throwsAuthError() {
@@ -115,10 +119,32 @@ class DisneyApiTest {
             ),
         )
         val details = api.getDetails("e1", "FINAL", ProviderRef(ProviderId.DISNEY, "e1", null))
+        assertEquals(MediaType.SERIES, details?.type) // has an episodes container
         assertEquals("A trickster god steps out of the shadow.", details?.synopsis)
         assertEquals(2021, details?.year)
         assertEquals(listOf("Tom Hiddleston", "Owen Wilson"), details?.cast)
         assertTrue(server.takeRequest().path!!.contains("/explore/v1.9/page/entity-e1"))
+    }
+
+    @Test fun getDetails_typesAsMovieWithoutEpisodesContainer() = runBlocking {
+        // A film has no `episodes` container; its synopsis/year live in the `details` container.
+        server.enqueue(
+            jsonBody(
+                """{"data":{"page":{
+                   "visuals":{"title":"Soul"},
+                   "containers":[
+                     {"type":"set","visuals":{"name":"SUGGESTIONS"}},
+                     {"type":"details","visuals":{"description":{"full":"A jazz pianist finds his spark."},
+                       "releaseYearRange":{"startYear":"2020"},
+                       "credits":[{"heading":"Distribution :","items":[{"displayText":"Jamie Foxx"}]}]}}
+                   ]}}}""",
+            ),
+        )
+        val d = api.getDetails("m1", "FINAL", ProviderRef(ProviderId.DISNEY, "m1", null))
+        assertEquals(MediaType.MOVIE, d?.type)
+        assertEquals("A jazz pianist finds his spark.", d?.synopsis)
+        assertEquals(2020, d?.year)
+        assertEquals(listOf("Jamie Foxx"), d?.cast)
     }
 
     private fun jsonBody(body: String) =

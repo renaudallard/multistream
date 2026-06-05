@@ -68,6 +68,9 @@ class SearchInteractor(
             title.detailProvider()?.let { (provider, ref) ->
                 runCatching { provider.getDetails(ref, configFor(provider, ref)) }.getOrNull()?.let { d ->
                     title = title.copy(
+                        // The provider detail knows movie vs series authoritatively (search may guess);
+                        // applying it stops films being sent to getSeasons for a phantom episode list.
+                        type = d.type,
                         synopsis = title.synopsis ?: d.synopsis,
                         cast = title.cast.ifEmpty { d.cast },
                         year = title.year ?: d.year,

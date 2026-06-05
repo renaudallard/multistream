@@ -15,6 +15,8 @@ import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
  * Parse Disney+ explore search responses: data.page.containers[].items[] where each item carries
@@ -44,11 +46,29 @@ object DisneyParser {
             provider = ProviderId.DISNEY,
             ref = ProviderRef(ProviderId.DISNEY, id, "https://www.disneyplus.com/browse/entity-$id", region),
             title = title,
-            type = MediaType.SERIES,
+            type = mediaType(item),
             year = year,
             posterUrl = poster,
             availabilityType = AvailabilityType.SUBSCRIPTION,
         )
+    }
+
+    /**
+     * Movie vs series for a search item. The visible fields are identical for both; the content type
+     * is only in the action `infoBlock` (a base64 protobuf) as `urn:ds:cmp:eva:movie|series`.
+     */
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun mediaType(item: JsonObject): MediaType {
+        val infoBlock = item["actions"].array()?.firstOrNull().obj()?.get("infoBlock").string()
+            ?: return MediaType.SERIES
+        val decoded = runCatching { Base64.decode(padBase64(infoBlock)).decodeToString() }.getOrNull()
+        return if (decoded?.contains("eva:movie") == true) MediaType.MOVIE else MediaType.SERIES
+    }
+
+    /** Normalize base64 padding; the API may send the infoBlock unpadded. */
+    private fun padBase64(s: String): String {
+        val core = s.trimEnd('=')
+        return core + "=".repeat((4 - core.length % 4) % 4)
     }
 
     /**
@@ -60,18 +80,25 @@ object DisneyParser {
         val pageData = page["data"].obj()?.get("page").obj() ?: return null
         val visuals = pageData["visuals"].obj()
         val title = visuals?.get("title").string()?.takeIf { it.isNotBlank() } ?: return null
-        val description = visuals?.get("description").obj()
+        val detailsVisuals = pageData["containers"].array()
+            ?.firstOrNull { it.obj()?.get("type").string() == "details" }?.obj()?.get("visuals").obj()
+        val description = visuals?.get("description").obj() ?: detailsVisuals?.get("description").obj()
         val synopsis = (
             description?.get("full").string()
                 ?: description?.get("medium").string()
                 ?: description?.get("brief").string()
                 ?: description?.get("default").string()
             )?.takeIf { it.isNotBlank() }
-        val year = visuals?.get("metastringParts").obj()?.get("releaseYearRange").obj()?.get("startYear").int()
+        val year = (
+            visuals?.get("metastringParts").obj()?.get("releaseYearRange").obj()
+                ?: detailsVisuals?.get("releaseYearRange").obj()
+            )?.get("startYear").int()
+        // A title is a series iff its page carries an `episodes` container; otherwise it is a film.
+        val isSeries = pageData["containers"].array()?.any { it.obj()?.get("type").string() == "episodes" } == true
         return ProviderTitleDetails(
             ref = ref,
             title = title,
-            type = MediaType.SERIES,
+            type = if (isSeries) MediaType.SERIES else MediaType.MOVIE,
             year = year,
             synopsis = synopsis,
             cast = parseCast(pageData),
