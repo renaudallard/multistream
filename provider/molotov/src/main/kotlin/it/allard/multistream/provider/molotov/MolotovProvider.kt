@@ -59,7 +59,10 @@ class MolotovProvider(
         val password = config.secrets.extra["password"]
         if (email != null && password != null) {
             return runCatching { login(email, password) }
-                .fold({ SessionState.Ready }, { SessionState.NeedsLogin(it.message ?: "Login failed") })
+                .fold(
+                    { fresh -> config.persistSecrets?.invoke(fresh); SessionState.Ready },
+                    { SessionState.NeedsLogin(it.message ?: "Login failed") },
+                )
         }
         return SessionState.NeedsLogin("Molotov login required")
     }
@@ -75,15 +78,27 @@ class MolotovProvider(
     }
 
     private suspend fun retryAfterAuth(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
-        val refreshed = runCatching { config.secrets.refreshToken?.let { api.refresh(it).accessToken } }.getOrNull()
+        val tokens = runCatching { config.secrets.refreshToken?.let { api.refresh(it) } }.getOrNull()
             ?: runCatching {
                 val email = config.secrets.extra["email"]
                 val password = config.secrets.extra["password"]
-                if (email != null && password != null) api.login(email, password).accessToken else null
+                if (email != null && password != null) api.login(email, password) else null
             }.getOrNull()
             ?: return emptyList()
-        accessToken = refreshed
-        return runCatching { api.search(query, refreshed, region) }.getOrDefault(emptyList())
+        accessToken = tokens.accessToken
+        persistRotated(tokens, config)
+        return runCatching { api.search(query, tokens.accessToken, region) }.getOrDefault(emptyList())
+    }
+
+    /** Persist a refreshed or re-logged-in session so the rotated refresh token survives a restart. */
+    private fun persistRotated(tokens: MolotovTokens, config: ProviderConfig) {
+        config.persistSecrets?.invoke(
+            ProviderSecrets(
+                token = tokens.accessToken,
+                refreshToken = tokens.refreshToken ?: config.secrets.refreshToken,
+                extra = config.secrets.extra,
+            ),
+        )
     }
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
