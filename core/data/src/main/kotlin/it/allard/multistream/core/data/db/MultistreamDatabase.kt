@@ -9,13 +9,10 @@ import androidx.room.RoomDatabase
         EpisodeProgressEntity::class,
         SeriesProgressEntity::class,
         TitleProviderPrefEntity::class,
-        CatalogCacheEntity::class,
-        DetailCacheEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class MultistreamDatabase : RoomDatabase() {
     abstract fun watchDao(): WatchDao
-    abstract fun cacheDao(): CacheDao
 }

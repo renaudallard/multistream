@@ -122,7 +122,7 @@ the **title page** and the user presses play inside the official app.
 app                  UI (Compose + Compose for TV), navigation, hand-written AppGraph, sample catalog
 core/model           pure Kotlin: Title/Season/Episode/Availability/ProviderRef/TitleKey,
                      normalizeTitle(), mergeResults(), computeNextEpisode()
-core/data            Room (tracking + disposable cache), DataStore settings, encrypted secrets
+core/data            Room (watch tracking), DataStore settings, encrypted secrets
 core/net             shared OkHttp client, tolerant JSON helpers, in-memory cookie jar
 provider/api         StreamingProvider interface, ProviderCapabilities, Launcher, DeepLinks, WebLoginSpec
 provider/<service>   one leaf module per service:

@@ -86,26 +86,6 @@ data class TitleProviderPrefEntity(
     val preferred: Boolean,
 )
 
-@Entity(tableName = "catalog_cache", primaryKeys = ["provider", "region", "queryHash"])
-data class CatalogCacheEntity(
-    val provider: String,
-    val region: String,
-    val queryHash: String,
-    val payloadJson: String,
-    val fetchedAt: Long,
-    val ttlMs: Long,
-)
-
-@Entity(tableName = "detail_cache", primaryKeys = ["provider", "providerTitleId", "region"])
-data class DetailCacheEntity(
-    val provider: String,
-    val providerTitleId: String,
-    val region: String,
-    val payloadJson: String,
-    val fetchedAt: Long,
-    val ttlMs: Long,
-)
-
 /** Join row for the Continue-Watching feed (tracked title + denormalized next-episode pointer). */
 data class ContinueWatchingRow(
     @Embedded val title: TrackedTitleEntity,

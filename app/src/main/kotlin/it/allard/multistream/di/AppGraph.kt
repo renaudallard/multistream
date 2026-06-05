@@ -2,7 +2,6 @@ package it.allard.multistream.di
 
 import android.content.Context
 import androidx.compose.runtime.staticCompositionLocalOf
-import it.allard.multistream.core.data.CacheRepository
 import it.allard.multistream.core.data.SecretStore
 import it.allard.multistream.core.data.SettingsRepository
 import it.allard.multistream.core.data.WatchRepository
@@ -34,7 +33,6 @@ class AppGraph(context: Context) {
     val settings: SettingsRepository by lazy { SettingsRepository(appContext) }
     val secrets: SecretStore by lazy { SecretStore(appContext) }
     val watchRepository: WatchRepository by lazy { WatchRepository(database) }
-    val cacheRepository: CacheRepository by lazy { CacheRepository(database) }
 
     val providers: List<StreamingProvider> by lazy {
         listOf(

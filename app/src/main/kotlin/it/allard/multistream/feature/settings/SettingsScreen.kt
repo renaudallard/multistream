@@ -33,7 +33,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -49,7 +48,6 @@ import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.StreamingProvider
 import it.allard.multistream.provider.api.WebLoginSpec
 import it.allard.multistream.ui.appViewModel
-import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen() {
@@ -59,7 +57,6 @@ fun SettingsScreen() {
     val loggedIn by viewModel.loggedIn.collectAsState()
     val linkPrompt by viewModel.linkPrompt.collectAsState()
     val message by viewModel.message.collectAsState()
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     LaunchedEffect(message) {
@@ -115,18 +112,6 @@ fun SettingsScreen() {
                         )
                     }
                 }
-            }
-        }
-        item {
-            OutlinedButton(
-                onClick = {
-                    scope.launch {
-                        graph.cacheRepository.wipe()
-                        Toast.makeText(context, "Catalog cache cleared", Toast.LENGTH_SHORT).show()
-                    }
-                },
-            ) {
-                Text("Clear catalog cache")
             }
         }
     }

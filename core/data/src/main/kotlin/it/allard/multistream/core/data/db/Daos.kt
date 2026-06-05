@@ -52,28 +52,3 @@ interface WatchDao {
     )
     fun continueWatching(): Flow<List<ContinueWatchingRow>>
 }
-
-@Dao
-interface CacheDao {
-    @Upsert suspend fun putCatalog(entry: CatalogCacheEntity)
-
-    @Query("SELECT * FROM catalog_cache WHERE provider = :provider AND region = :region AND queryHash = :hash")
-    suspend fun getCatalog(provider: String, region: String, hash: String): CatalogCacheEntity?
-
-    @Upsert suspend fun putDetail(entry: DetailCacheEntity)
-
-    @Query("SELECT * FROM detail_cache WHERE provider = :provider AND providerTitleId = :id AND region = :region")
-    suspend fun getDetail(provider: String, id: String, region: String): DetailCacheEntity?
-
-    @Query("DELETE FROM catalog_cache WHERE fetchedAt + ttlMs < :now")
-    suspend fun evictCatalog(now: Long)
-
-    @Query("DELETE FROM detail_cache WHERE fetchedAt + ttlMs < :now")
-    suspend fun evictDetail(now: Long)
-
-    @Query("DELETE FROM catalog_cache")
-    suspend fun wipeCatalog()
-
-    @Query("DELETE FROM detail_cache")
-    suspend fun wipeDetail()
-}
