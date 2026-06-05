@@ -60,7 +60,7 @@ shell for phone and Android TV.
 | **Arte** | ✅ | title page | summary | optional | free public API; the region selects the catalog language |
 | **Plex** | ✅ | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
 | **RTBF Auvio** | ✅ | title page | — | optional | free public API |
-| **RTL Play** | opens app | opens app | — | optional | catalog API is JWT-gated and geo-locked, so search runs inside the app |
+| **RTL Play** | ✅ | title page | — | optional | catalog search via DPG Media's lfvp API (anonymous, but Belgium-only); needs a Belgian connection |
 | **Play RTS** | ✅ | video page | — | optional | free SRG SSR Integration Layer; video results only |
 
 `✅ Search` = a real catalog query from this app. `\*` = login is required for that provider's
@@ -84,8 +84,8 @@ Login is per-provider and never required for search except where noted above.
   (no token to paste), searching that server with a Discover fallback.
 - **Arte, RTBF Auvio** search without login. An **optional** WebView login captures the site session
   and passes it to the search best-effort.
-- **RTL Play** is launch-only. The **optional** login opens RTL's account SSO (`sso.rtl.be`). Because
-  the catalog API is JWT-gated and geo-locked, that session does not drive search.
+- **RTL Play** searches without login: its lfvp catalog API is anonymous, though geo-restricted to
+  Belgium. The **optional** login opens RTL's account SSO (`sso.rtl.be`) for a personalized session.
 - **Play RTS** searches without login (its SRG SSR Integration Layer catalog is public); an
   **optional** WebView login captures your rts.ch account session and passes it to the search
   best-effort.
@@ -109,7 +109,8 @@ the **title page** and the user presses play inside the official app.
 - **Plex** `https://watch.plex.tv/<movie|show>/<slug>` for Discover hits; server-library hits have no
   public slug and open the Plex app.
 - **RTBF Auvio** `https://auvio.rtbf.be<path>`.
-- **RTL Play** opens the app (no public title path; the catalog is geo-locked).
+- **RTL Play** `https://www.rtlplay.be/rtlplay/<slug>~<detailId>` opens the title; the in-app search
+  row opens `https://www.rtlplay.be/rtlplay/recherche?q=<query>`.
 - **Play RTS** `https://www.rts.ch/play/tv/redirect/detail/<id>` (the numeric id from the media URN).
 
 ## Modules
