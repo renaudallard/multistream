@@ -75,6 +75,14 @@ class MolotovApiTest {
         assertEquals("https://img/99999999999x1/x.jpg", results.first().posterUrl)
     }
 
+    @Test fun search_doesNotStackOverflowOnDeeplyNestedJson() = runBlocking {
+        val n = 50_000
+        val deep = "{\"items\":".repeat(n) + "0" + "}".repeat(n)
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(deep))
+        val results = api.search("x", "AT", Region.FR) // the depth cap must keep this from overflowing
+        assertTrue(results.isEmpty())
+    }
+
     @Test fun search_unauthorized_throwsAuthError() {
         server.enqueue(MockResponse().setResponseCode(401))
         try {

@@ -21,6 +21,9 @@ object MolotovParser {
     private val CONTENT_TYPES = setOf("program", "vod", "episode", "season", "channel")
     private val CONTAINER_KEYS = listOf("sections", "items", "results", "catalog")
 
+    // Cap recursion depth so a deeply nested response can't overflow the stack.
+    private const val MAX_DEPTH = 100
+
     fun parse(root: JsonElement, region: Region): List<UnifiedSearchResult> {
         val tiles = mutableListOf<JsonObject>()
         collect(root, tiles)
@@ -28,14 +31,15 @@ object MolotovParser {
         return tiles.mapNotNull { toResult(it, region) }.filter { seen.add(it.ref.providerTitleId) }
     }
 
-    private fun collect(element: JsonElement, out: MutableList<JsonObject>) {
+    private fun collect(element: JsonElement, out: MutableList<JsonObject>, depth: Int = 0) {
+        if (depth > MAX_DEPTH) return
         when (element) {
-            is JsonArray -> element.forEach { collect(it, out) }
+            is JsonArray -> element.forEach { collect(it, out, depth + 1) }
             is JsonObject -> {
                 if (element["type"].string() in CONTENT_TYPES && element["title"].string() != null) {
                     out.add(element)
                 }
-                CONTAINER_KEYS.forEach { key -> element[key]?.let { collect(it, out) } }
+                CONTAINER_KEYS.forEach { key -> element[key]?.let { collect(it, out, depth + 1) } }
             }
             else -> Unit
         }
@@ -73,10 +77,11 @@ object MolotovParser {
         return urls.firstOrNull { isPortrait(it) } ?: urls.firstOrNull()
     }
 
-    private fun collectUrls(element: JsonElement?, out: MutableList<String>) {
+    private fun collectUrls(element: JsonElement?, out: MutableList<String>, depth: Int = 0) {
+        if (depth > MAX_DEPTH) return
         when (element) {
-            is JsonObject -> element.values.forEach { collectUrls(it, out) }
-            is JsonArray -> element.forEach { collectUrls(it, out) }
+            is JsonObject -> element.values.forEach { collectUrls(it, out, depth + 1) }
+            is JsonArray -> element.forEach { collectUrls(it, out, depth + 1) }
             is JsonPrimitive -> element.string()?.takeIf { it.startsWith("http") }?.let { out.add(it) }
             else -> Unit
         }

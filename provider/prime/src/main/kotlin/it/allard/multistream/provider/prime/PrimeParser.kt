@@ -21,6 +21,10 @@ object PrimeParser {
     private val TEMPLATE = Regex("<script[^>]*type=\"text/template\"[^>]*>(.*?)</script>", RegexOption.DOT_MATCHES_ALL)
     private val ID_KEYS = listOf("titleID", "titleId", "gti", "asin")
 
+    // Cap recursion depth: the search response is untrusted web JSON, and a deeply nested document
+    // would otherwise overflow the stack. Real catalog payloads nest only a handful of levels.
+    private const val MAX_DEPTH = 100
+
     fun parse(html: String, region: Region): List<UnifiedSearchResult> {
         val out = LinkedHashMap<String, UnifiedSearchResult>()
         // The search endpoint returns JSON (Accept: application/json); walk the whole document for
@@ -35,7 +39,8 @@ object PrimeParser {
         return out.values.toList()
     }
 
-    private fun collect(element: JsonElement, region: Region, out: MutableMap<String, UnifiedSearchResult>) {
+    private fun collect(element: JsonElement, region: Region, out: MutableMap<String, UnifiedSearchResult>, depth: Int = 0) {
+        if (depth > MAX_DEPTH) return
         when (element) {
             is JsonObject -> {
                 val title = element["title"].string() ?: element["displayTitle"].string()
@@ -68,18 +73,21 @@ object PrimeParser {
                         ),
                     )
                 }
-                element.values.forEach { collect(it, region, out) }
+                element.values.forEach { collect(it, region, out, depth + 1) }
             }
-            is JsonArray -> element.forEach { collect(it, region, out) }
+            is JsonArray -> element.forEach { collect(it, region, out, depth + 1) }
             else -> Unit
         }
     }
 
     /** Depth-first search of an arbitrary JSON value for the first http(s) URL string. */
-    private fun firstHttpUrl(element: JsonElement?): String? = when (element) {
-        is JsonObject -> element.values.firstNotNullOfOrNull { firstHttpUrl(it) }
-        is JsonArray -> element.firstNotNullOfOrNull { firstHttpUrl(it) }
-        is JsonPrimitive -> element.string()?.takeIf { it.startsWith("http") }
-        else -> null
+    private fun firstHttpUrl(element: JsonElement?, depth: Int = 0): String? {
+        if (depth > MAX_DEPTH) return null
+        return when (element) {
+            is JsonObject -> element.values.firstNotNullOfOrNull { firstHttpUrl(it, depth + 1) }
+            is JsonArray -> element.firstNotNullOfOrNull { firstHttpUrl(it, depth + 1) }
+            is JsonPrimitive -> element.string()?.takeIf { it.startsWith("http") }
+            else -> null
+        }
     }
 }

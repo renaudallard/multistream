@@ -63,6 +63,14 @@ class PrimeApiTest {
         assertEquals("https://app.primevideo.com/detail?gti=amzn1.dv.gti.aaa", results.first().ref.deepLinkHint)
     }
 
+    @Test fun search_doesNotStackOverflowOnDeeplyNestedJson() = runBlocking {
+        val n = 50_000
+        val deep = "[".repeat(n) + "]".repeat(n)
+        server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(deep))
+        val results = api.search("x", "at-main=tok", Region("US")) // depth cap must prevent overflow
+        assertTrue(results.isEmpty())
+    }
+
     @Test fun forbidden_throwsAuthError() {
         server.enqueue(MockResponse().setResponseCode(403))
         try {
