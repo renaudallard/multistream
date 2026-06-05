@@ -1,8 +1,9 @@
 package it.allard.multistream.core.net
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.serialization.json.Json
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.Cookie
 import okhttp3.CookieJar
 import okhttp3.HttpUrl
@@ -10,8 +11,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.ResponseBody.Companion.toResponseBody
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /** Tolerant JSON reader for volatile, undocumented provider responses. */
 val NetJson: Json = Json {
@@ -59,17 +63,32 @@ class InMemoryCookieJar : CookieJar {
 }
 
 /**
- * Execute a call and fully read its body, all on the IO dispatcher. The body is returned
- * buffered in memory so callers can read it (body.string()) on any thread. execute() alone
- * only reads the headers; a lazy body.string() back on the main thread reads from the socket
- * and throws NetworkOnMainThreadException for any response too large to fit the buffer
- * execute() already filled (e.g. a large gzipped HTML page).
+ * Execute a call off the caller's thread and fully read its body, returned buffered in memory so
+ * callers can read it (body.string()) on any thread. Uses enqueue + suspendCancellableCoroutine so a
+ * cancelled coroutine (e.g. a superseded search) cancels the in-flight call instead of leaving it to
+ * run to its timeout. The original socket-backed response is always closed.
  */
-suspend fun OkHttpClient.await(request: Request): Response =
-    withContext(Dispatchers.IO) {
-        newCall(request).execute().use { response ->
-            val type = response.body?.contentType()
-            val bytes = response.body?.bytes() ?: ByteArray(0)
-            response.newBuilder().body(bytes.toResponseBody(type)).build()
-        }
+suspend fun OkHttpClient.await(request: Request): Response {
+    val call = newCall(request)
+    return suspendCancellableCoroutine { cont ->
+        cont.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (!cont.isCancelled) cont.resumeWithException(e)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                try {
+                    val buffered = response.use {
+                        val type = it.body?.contentType()
+                        val bytes = it.body?.bytes() ?: ByteArray(0)
+                        it.newBuilder().body(bytes.toResponseBody(type)).build()
+                    }
+                    cont.resume(buffered)
+                } catch (e: IOException) {
+                    if (!cont.isCancelled) cont.resumeWithException(e)
+                }
+            }
+        })
     }
+}
