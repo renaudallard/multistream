@@ -36,9 +36,12 @@ class LibraryViewModel(
 
     fun open(entry: LibraryEntry) {
         viewModelScope.launch {
-            val title = interactor.getTitle(entry.key) ?: return@launch
-            val availability = title.availabilities.firstOrNull() ?: return@launch
-            val provider = registry.get(availability.provider) ?: return@launch
+            // After a restart the in-memory search index is empty, so fall back to the launch target
+            // persisted when the title was tracked.
+            val ref = interactor.getTitle(entry.key)?.availabilities?.firstOrNull()?.ref
+                ?: watchRepository.launchRef(entry.key)
+                ?: return@launch
+            val provider = registry.get(ref.provider) ?: return@launch
             val season = entry.nextSeason
             val episodeNumber = entry.nextEpisode
             val episode = if (season != null && episodeNumber != null && provider.capabilities.canDeepLinkToEpisode) {
@@ -46,7 +49,7 @@ class LibraryViewModel(
             } else {
                 null
             }
-            _message.value = launchController.launchTitle(provider, availability.ref, episode)
+            _message.value = launchController.launchTitle(provider, ref, episode)
         }
     }
 

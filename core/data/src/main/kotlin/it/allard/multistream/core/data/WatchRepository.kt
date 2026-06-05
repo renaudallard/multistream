@@ -4,10 +4,13 @@ import androidx.room.withTransaction
 import it.allard.multistream.core.data.db.EpisodeProgressEntity
 import it.allard.multistream.core.data.db.MultistreamDatabase
 import it.allard.multistream.core.data.db.SeriesProgressEntity
+import it.allard.multistream.core.data.db.TitleProviderPrefEntity
 import it.allard.multistream.core.data.db.TrackedTitleEntity
 import it.allard.multistream.core.data.db.WatchStatus
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
+import it.allard.multistream.core.model.ProviderId
+import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.Title
 import it.allard.multistream.core.model.TitleKey
 import it.allard.multistream.core.model.computeNextEpisode
@@ -72,7 +75,32 @@ class WatchRepository(private val db: MultistreamDatabase) {
                 ),
             )
         }
+        // Persist where the title can be launched so Library can open it after a process restart,
+        // when the in-memory search index is gone.
+        if (title.availabilities.isNotEmpty()) {
+            dao.upsertProviderPrefs(
+                title.availabilities.map { a ->
+                    TitleProviderPrefEntity(
+                        titleKey = key,
+                        provider = a.provider.name,
+                        providerTitleId = a.ref.providerTitleId,
+                        deepLinkHint = a.ref.deepLinkHint,
+                        preferred = false,
+                    )
+                },
+            )
+        }
     }
+
+    /** The stored launch target for a tracked title, for opening it after the index is gone. */
+    suspend fun launchRef(key: TitleKey): ProviderRef? =
+        dao.providerPrefs(key.serialize()).firstOrNull()?.let { pref ->
+            ProviderRef(
+                provider = ProviderId.valueOf(pref.provider),
+                providerTitleId = pref.providerTitleId,
+                deepLinkHint = pref.deepLinkHint,
+            )
+        }
 
     suspend fun setInWatchlist(title: Title, inList: Boolean) {
         ensureTracked(title)
