@@ -7,6 +7,9 @@ import androidx.room.Room
 object DatabaseFactory {
     fun create(context: Context): MultistreamDatabase =
         Room.databaseBuilder(context.applicationContext, MultistreamDatabase::class.java, "multistream.db")
-            .fallbackToDestructiveMigration()
+            // Destructive only on downgrade (rare). A schema upgrade must ship a Migration so the
+            // user's watch history/watchlist/progress survive; without one Room throws rather than
+            // silently wiping the whole DB (cache and user data share it).
+            .fallbackToDestructiveMigrationOnDowngrade()
             .build()
 }
