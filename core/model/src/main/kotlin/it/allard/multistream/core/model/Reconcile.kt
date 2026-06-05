@@ -61,20 +61,47 @@ fun mergeResults(
 ): List<Title> {
     val out = mutableListOf<Title>()
 
-    val byExternal = LinkedHashMap<String, MutableList<UnifiedSearchResult>>()
-    val heuristic = mutableListOf<UnifiedSearchResult>()
-    for (r in results) {
-        when (val k = titleKeyFor(r.title, r.year, r.externalIds, r.type)) {
-            is TitleKey.External -> byExternal.getOrPut(k.serialize()) { mutableListOf() }.add(r)
-            is TitleKey.Heuristic -> heuristic.add(r)
-        }
-    }
-    byExternal.values.forEach { out += toTitle(it, providerPriority) }
+    // Rows carrying any external id are authoritative: union those that share ANY id (imdb, tmdbTv or
+    // tmdbMovie) so a row known only by a secondary id still merges with one that also carries imdb.
+    val (external, heuristic) = results.partition { hasExternalId(it.externalIds) }
+    groupByExternalIds(external).forEach { out += toTitle(it, providerPriority) }
 
     heuristic.groupBy { it.type to normalizeTitle(it.title) }
         .forEach { (_, members) -> clusterByYear(members).forEach { out += toTitle(it, providerPriority) } }
 
     return out
+}
+
+private fun hasExternalId(ids: ExternalIds): Boolean =
+    ids.imdb != null || ids.tmdbTv != null || ids.tmdbMovie != null
+
+private fun idTokens(ids: ExternalIds): List<String> = buildList {
+    ids.imdb?.let { add("imdb:$it") }
+    ids.tmdbTv?.let { add("tmdbtv:$it") }
+    ids.tmdbMovie?.let { add("tmdbmovie:$it") }
+}
+
+/** Group rows into connected components where an edge is any shared external id (union-find). */
+private fun groupByExternalIds(rows: List<UnifiedSearchResult>): List<List<UnifiedSearchResult>> {
+    val parent = IntArray(rows.size) { it }
+    fun find(x: Int): Int {
+        var root = x
+        while (parent[root] != root) {
+            parent[root] = parent[parent[root]]
+            root = parent[root]
+        }
+        return root
+    }
+    fun union(a: Int, b: Int) {
+        parent[find(a)] = find(b)
+    }
+    val tokenOwner = HashMap<String, Int>()
+    rows.forEachIndexed { i, r ->
+        idTokens(r.externalIds).forEach { token ->
+            tokenOwner.put(token, i)?.let { union(it, i) }
+        }
+    }
+    return rows.indices.groupBy { find(it) }.values.map { idxs -> idxs.map { rows[it] } }
 }
 
 /**

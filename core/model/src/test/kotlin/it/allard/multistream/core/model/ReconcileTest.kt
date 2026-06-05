@@ -22,13 +22,14 @@ class ReconcileTest {
         year: Int?,
         type: MediaType = MediaType.SERIES,
         imdb: String? = null,
+        tmdbMovie: Long? = null,
     ) = UnifiedSearchResult(
         provider = provider,
         ref = ProviderRef(provider, "$provider-$title", region = Region.FR),
         title = title,
         type = type,
         year = year,
-        externalIds = ExternalIds(imdb = imdb),
+        externalIds = ExternalIds(imdb = imdb, tmdbMovie = tmdbMovie),
     )
 
     @Test fun same_show_on_two_providers_merges_with_two_availabilities() {
@@ -130,5 +131,16 @@ class ReconcileTest {
         )
         assertEquals(1, merged.size)
         assertTrue(merged.first().key is TitleKey.External)
+    }
+
+    @Test fun rows_sharing_only_a_secondary_id_merge() {
+        val merged = mergeResults(
+            listOf(
+                result(ProviderId.PRIME, "Heat", 1995, type = MediaType.MOVIE, tmdbMovie = 949),
+                result(ProviderId.NETFLIX, "Heat", 1995, type = MediaType.MOVIE, imdb = "tt0113277", tmdbMovie = 949),
+            )
+        )
+        assertEquals(1, merged.size)
+        assertEquals(2, merged.first().availabilities.size)
     }
 }
