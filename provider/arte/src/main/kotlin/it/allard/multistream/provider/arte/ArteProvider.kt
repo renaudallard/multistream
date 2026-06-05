@@ -34,9 +34,6 @@ class ArteProvider(
         optionalLogin = true,
     )
 
-    @Volatile
-    private var cookie: String? = null
-
     override fun supportedRegions(): Set<Region> =
         setOf(Region("FR"), Region("DE"), Region("EN"), Region("ES"), Region("IT"), Region("PL"))
 
@@ -47,15 +44,11 @@ class ArteProvider(
         autoCapture = false,
     )
 
-    override suspend fun loginWithCookies(cookies: String): ProviderSecrets {
-        cookie = cookies
-        return ProviderSecrets(cookie = cookies)
-    }
+    override suspend fun loginWithCookies(cookies: String): ProviderSecrets =
+        ProviderSecrets(cookie = cookies)
 
-    override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
-        if (cookie == null) cookie = config.secrets.cookie
-        return runCatching { api.search(query, langFor(region), cookie) }.getOrDefault(emptyList())
-    }
+    override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
+        runCatching { api.search(query, langFor(region), config.secrets.cookie) }.getOrDefault(emptyList())
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
         val url = ref.deepLinkHint
