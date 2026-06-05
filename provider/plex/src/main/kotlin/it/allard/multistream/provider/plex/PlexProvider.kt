@@ -6,6 +6,7 @@ import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
+import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.Launcher
@@ -31,6 +32,7 @@ class PlexProvider(
     override val packageName = "com.plexapp.android"
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canGetDetails = true,
         canDeepLinkToTitle = true,
         requiresAuth = false,
         optionalLogin = true,
@@ -98,6 +100,13 @@ class PlexProvider(
             // A bad/unreachable server must never blank out search: fall back to Discover.
             runCatching { api.search(query, discoverToken) }.getOrDefault(emptyList())
         }
+    }
+
+    override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? {
+        ensureSession(config)
+        val serverUrl = server ?: return null
+        val serverToken = token ?: return null
+        return runCatching { api.getDetails(serverUrl, serverToken, ref.providerTitleId, ref) }.getOrNull()
     }
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {

@@ -89,6 +89,13 @@ fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
                     }
                 }
                 title.synopsis?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                if (title.cast.isNotEmpty()) {
+                    Text(
+                        "Cast: ${title.cast.take(8).joinToString(", ")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
 
                 TextButton(onClick = viewModel::toggleWatchlist) {
                     Text(if (state.inWatchlist) "In Watchlist ✓" else "Add to Watchlist")

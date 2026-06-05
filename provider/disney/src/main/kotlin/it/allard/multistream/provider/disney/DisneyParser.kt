@@ -5,6 +5,7 @@ import it.allard.multistream.core.model.Episode
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
+import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.array
@@ -48,6 +49,47 @@ object DisneyParser {
             posterUrl = poster,
             availabilityType = AvailabilityType.SUBSCRIPTION,
         )
+    }
+
+    /**
+     * Entity page -> title synopsis, release year and cast. Synopsis and year live on the top-level
+     * `visuals`; the cast is in the `details` container, whose `credits` group actors under a
+     * locale-specific heading (`Cast`, `Avec`, `Reparto`, ...) as `{displayText}` items.
+     */
+    fun parseDetails(page: JsonObject, ref: ProviderRef): ProviderTitleDetails? {
+        val pageData = page["data"].obj()?.get("page").obj() ?: return null
+        val visuals = pageData["visuals"].obj()
+        val title = visuals?.get("title").string()?.takeIf { it.isNotBlank() } ?: return null
+        val description = visuals?.get("description").obj()
+        val synopsis = (
+            description?.get("full").string()
+                ?: description?.get("medium").string()
+                ?: description?.get("brief").string()
+                ?: description?.get("default").string()
+            )?.takeIf { it.isNotBlank() }
+        val year = visuals?.get("metastringParts").obj()?.get("releaseYearRange").obj()?.get("startYear").int()
+        return ProviderTitleDetails(
+            ref = ref,
+            title = title,
+            type = MediaType.SERIES,
+            year = year,
+            synopsis = synopsis,
+            cast = parseCast(pageData),
+        )
+    }
+
+    // Credits headings that denote on-screen actors, across Disney+ locales.
+    private val CAST_HEADINGS = listOf("cast", "starring", "avec", "distribution", "acteur", "darsteller", "reparto", "elenco")
+
+    /** The `details` container groups credits by role; take the actors group, else the largest group. */
+    private fun parseCast(pageData: JsonObject): List<String> {
+        val details = pageData["containers"].array()
+            ?.firstOrNull { it.obj()?.get("type").string() == "details" }?.obj() ?: return emptyList()
+        val groups = details["visuals"].obj()?.get("credits").array()?.mapNotNull { it.obj() } ?: return emptyList()
+        val actors = groups.firstOrNull { group ->
+            group["heading"].string()?.lowercase()?.let { h -> CAST_HEADINGS.any { h.contains(it) } } == true
+        } ?: groups.maxByOrNull { it["items"].array()?.size ?: 0 }
+        return actors?.get("items").array()?.mapNotNull { it.obj()?.get("displayText").string() }.orEmpty()
     }
 
     data class SeasonRef(val id: String, val number: Int, val name: String?)

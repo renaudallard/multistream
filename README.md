@@ -50,21 +50,23 @@ The spine works for **all ten**: deep-link launch, local watch tracking (watched
 series next-episode, watchlist, continue-watching), a per-provider region setting, and one adaptive
 shell for phone and Android TV.
 
-| Service | Search | Launch | Login | Notes |
-|---|:--:|:--:|:--:|---|
-| **Netflix** | ✅ | title page | WebView \* | title and in-app-search deep links; search verified on a real device, the session can need a fresh login after heavy use |
-| **Disney+** | ✅ | title page | email / password | needs live verification with your account |
-| **Prime Video** | ✅ | detail page | WebView \* | best-effort and unverified; TV build is bundled, the mobile package is tried on phones |
-| **Molotov** | ✅ | deep link | email / password | rich title and program deep links; needs live verification |
-| **Zattoo** | ✅ | opens app | email / password | the manifest carries no title path yet, so launch opens the app |
-| **Arte** | ✅ | title page | optional | free public API; the region selects the catalog language |
-| **Plex** | ✅ | watch.plex.tv | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
-| **RTBF Auvio** | ✅ | title page | optional | free public API |
-| **RTL Play** | opens app | opens app | optional | catalog API is JWT-gated and geo-locked, so search runs inside the app |
-| **Play RTS** | ✅ | video page | optional | free SRG SSR Integration Layer; video results only |
+| Service | Search | Launch | Details | Login | Notes |
+|---|:--:|:--:|:--:|:--:|---|
+| **Netflix** | ✅ | title page | cast, summary | WebView \* | title and in-app-search deep links; search verified on a real device, the session can need a fresh login after heavy use |
+| **Disney+** | ✅ | title page | cast, summary | email / password | needs live verification with your account |
+| **Prime Video** | ✅ | detail page | summary | WebView \* | best-effort and unverified; TV build is bundled, the mobile package is tried on phones |
+| **Molotov** | ✅ | deep link | summary | email / password | rich title and program deep links; needs live verification |
+| **Zattoo** | ✅ | opens app | — | email / password | the manifest carries no title path yet, so launch opens the app |
+| **Arte** | ✅ | title page | summary | optional | free public API; the region selects the catalog language |
+| **Plex** | ✅ | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
+| **RTBF Auvio** | ✅ | title page | — | optional | free public API |
+| **RTL Play** | opens app | opens app | — | optional | catalog API is JWT-gated and geo-locked, so search runs inside the app |
+| **Play RTS** | ✅ | video page | — | optional | free SRG SSR Integration Layer; video results only |
 
 `✅ Search` = a real catalog query from this app. `\*` = login is required for that provider's
-search. Everything else searches without a login.
+search. Everything else searches without a login. `Details` = what the title screen adds when you
+open a result: a plot summary, and the billed cast where the service exposes it (a release year
+shows wherever search returns one); `—` providers show the poster, title and year only.
 
 A small built-in sample catalog ships so the flow is demonstrable offline; remove it once live
 search is confirmed. Search runs only on a device with network.

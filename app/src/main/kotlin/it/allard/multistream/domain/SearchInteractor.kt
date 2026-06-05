@@ -3,6 +3,7 @@ package it.allard.multistream.domain
 import it.allard.multistream.core.data.SecretStore
 import it.allard.multistream.core.data.SettingsRepository
 import it.allard.multistream.core.model.MediaType
+import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Title
 import it.allard.multistream.core.model.TitleKey
@@ -57,26 +58,49 @@ class SearchInteractor(
     /** Resolve a title from the sample catalog or the last search results. */
     suspend fun getTitle(key: TitleKey): Title? = SampleCatalog.byKey(key) ?: index[key.serialize()]
 
-    /** Like [getTitle], but enriches a series that has no seasons from the best episode provider. */
+    /**
+     * Resolve a title and enrich it from the providers: synopsis/cast/date from the best
+     * detail-capable provider, and (for a series with none) its seasons from the best episode provider.
+     */
     suspend fun loadDetails(key: TitleKey): Title? {
-        val base = getTitle(key) ?: return null
-        if (base.seasons.isNotEmpty() || base.type != MediaType.SERIES) return base
-        val availability = base.availabilities.firstOrNull {
-            registry.get(it.provider)?.capabilities?.canListEpisodes == true
-        } ?: return base
-        val provider = registry.get(availability.provider) ?: return base
-        val region = availability.ref.region
-            ?: settings.region(provider.id)
-            ?: provider.supportedRegions().firstOrNull()
-            ?: Region("US")
-        val config = ProviderConfig(
+        var title = getTitle(key) ?: return null
+        if (title.synopsis == null || title.cast.isEmpty()) {
+            title.detailProvider()?.let { (provider, ref) ->
+                runCatching { provider.getDetails(ref, configFor(provider, ref)) }.getOrNull()?.let { d ->
+                    title = title.copy(
+                        synopsis = title.synopsis ?: d.synopsis,
+                        cast = title.cast.ifEmpty { d.cast },
+                        year = title.year ?: d.year,
+                        posterUrl = title.posterUrl ?: d.posterUrl,
+                    )
+                }
+            }
+        }
+        if (title.type == MediaType.SERIES && title.seasons.isEmpty()) {
+            title.episodeProvider()?.let { (provider, ref) ->
+                val seasons = runCatching { provider.getSeasons(ref, configFor(provider, ref)) }.getOrDefault(emptyList())
+                if (seasons.isNotEmpty()) title = title.copy(seasons = seasons)
+            }
+        }
+        return title
+    }
+
+    private fun Title.detailProvider(): Pair<StreamingProvider, ProviderRef>? =
+        availabilities.firstOrNull { registry.get(it.provider)?.capabilities?.canGetDetails == true }
+            ?.let { a -> registry.get(a.provider)?.let { it to a.ref } }
+
+    private fun Title.episodeProvider(): Pair<StreamingProvider, ProviderRef>? =
+        availabilities.firstOrNull { registry.get(it.provider)?.capabilities?.canListEpisodes == true }
+            ?.let { a -> registry.get(a.provider)?.let { it to a.ref } }
+
+    private suspend fun configFor(provider: StreamingProvider, ref: ProviderRef): ProviderConfig {
+        val region = ref.region ?: settings.region(provider.id) ?: provider.supportedRegions().firstOrNull() ?: Region("US")
+        return ProviderConfig(
             region,
             enabled = true,
             secrets = secrets.read(provider.id),
             persistSecrets = { secrets.write(provider.id, it) },
         )
-        val seasons = runCatching { provider.getSeasons(availability.ref, config) }.getOrDefault(emptyList())
-        return if (seasons.isNotEmpty()) base.copy(seasons = seasons) else base
     }
 
     private suspend fun ProducerScope<SearchUpdate>.emit(query: String, results: List<UnifiedSearchResult>, loading: Boolean) {

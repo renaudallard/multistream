@@ -1,5 +1,8 @@
 package it.allard.multistream.provider.plex
 
+import it.allard.multistream.core.model.MediaType
+import it.allard.multistream.core.model.ProviderRef
+import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.array
@@ -129,6 +132,24 @@ class PlexApi(
             if (!response.isSuccessful) throw PlexApiException("HTTP ${response.code}")
             val root = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj() ?: return emptyList()
             return PlexParser.parse(root, imageBase = serverUrl, token = token)
+        }
+    }
+
+    /** Fetch a server item's full metadata: synopsis, year, and cast (the `Role` tags). */
+    suspend fun getDetails(serverUrl: String, token: String, ratingKey: String, ref: ProviderRef): ProviderTitleDetails? {
+        val url = "${serverUrl.trimEnd('/')}/library/metadata/$ratingKey"
+        client.await(Request.Builder().url(url).headers(headers(token)).get().build()).use { response ->
+            if (!response.isSuccessful) return null
+            val meta = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
+                ?.get("MediaContainer").obj()?.get("Metadata").array()?.firstOrNull()?.obj() ?: return null
+            return ProviderTitleDetails(
+                ref = ref,
+                title = meta["title"].string() ?: "",
+                type = if (meta["type"].string() == "show") MediaType.SERIES else MediaType.MOVIE,
+                year = meta["year"].int(),
+                synopsis = meta["summary"].string()?.takeIf { it.isNotBlank() },
+                cast = meta["Role"].array()?.mapNotNull { it.obj()?.get("tag").string() }.orEmpty(),
+            )
         }
     }
 

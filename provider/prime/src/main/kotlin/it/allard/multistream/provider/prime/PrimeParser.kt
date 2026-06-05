@@ -63,6 +63,7 @@ object PrimeParser {
                             title = title,
                             type = media,
                             posterUrl = poster,
+                            synopsis = element["synopsis"].string()?.takeIf { it.isNotBlank() },
                             availabilityType = AvailabilityType.SUBSCRIPTION,
                         ),
                     )

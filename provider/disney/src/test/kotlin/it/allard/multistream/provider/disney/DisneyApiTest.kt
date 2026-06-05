@@ -1,5 +1,7 @@
 package it.allard.multistream.provider.disney
 
+import it.allard.multistream.core.model.ProviderId
+import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.net.buildClient
 import kotlinx.coroutines.runBlocking
@@ -95,6 +97,28 @@ class DisneyApiTest {
         assertEquals(2, seasons[0].episodes.size)
         assertEquals("Pilot", seasons[0].episodes[0].title)
         assertEquals(30, seasons[0].episodes[0].runtimeMin)
+    }
+
+    @Test fun getDetails_parsesSynopsisYearAndCast() = runBlocking {
+        server.enqueue(
+            jsonBody(
+                """{"data":{"page":{
+                   "visuals":{"title":"Loki","description":{"full":"A trickster god steps out of the shadow."},
+                     "metastringParts":{"releaseYearRange":{"startYear":"2021"}}},
+                   "containers":[
+                     {"type":"episodes"},
+                     {"type":"details","visuals":{"credits":[
+                       {"heading":"Cast","items":[{"displayText":"Tom Hiddleston"},{"displayText":"Owen Wilson"}]},
+                       {"heading":"Director","items":[{"displayText":"Kate Herron"}]}
+                     ]}}
+                   ]}}}""",
+            ),
+        )
+        val details = api.getDetails("e1", "FINAL", ProviderRef(ProviderId.DISNEY, "e1", null))
+        assertEquals("A trickster god steps out of the shadow.", details?.synopsis)
+        assertEquals(2021, details?.year)
+        assertEquals(listOf("Tom Hiddleston", "Owen Wilson"), details?.cast)
+        assertTrue(server.takeRequest().path!!.contains("/explore/v1.9/page/entity-e1"))
     }
 
     private fun jsonBody(body: String) =

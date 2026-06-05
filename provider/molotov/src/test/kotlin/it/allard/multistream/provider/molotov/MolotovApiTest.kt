@@ -45,7 +45,7 @@ class MolotovApiTest {
             MockResponse().setHeader("Content-Type", "application/json").setBody(
                 """
                 {"sections":[{"title":"Results","items":[
-                  {"type":"program","id":"p1","slug":"lupin","title":"Lupin","image_bundle":{"poster":{"medium":{"url":"https://img/lupin.jpg"}}}},
+                  {"type":"program","id":"p1","slug":"lupin","title":"Lupin","description":"A gentleman thief seeks revenge.","image_bundle":{"poster":{"medium":{"url":"https://img/lupin.jpg"}}}},
                   {"type":"vod","id":"v9","slug":"oss117","title":"OSS 117"},
                   {"type":"person","id":"x","title":"Some Actor"}
                 ]}]}
@@ -58,6 +58,7 @@ class MolotovApiTest {
         assertEquals(MediaType.SERIES, lupin.type)
         assertEquals("https://www.molotov.tv/lupin", lupin.ref.deepLinkHint)
         assertEquals("https://img/lupin.jpg", lupin.posterUrl)
+        assertEquals("A gentleman thief seeks revenge.", lupin.synopsis)
         assertEquals(MediaType.MOVIE, results.first { it.title == "OSS 117" }.type)
     }
 

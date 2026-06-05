@@ -37,6 +37,8 @@ object ArteParser {
                 title = title,
                 type = if (isCollection) MediaType.SERIES else MediaType.MOVIE,
                 posterUrl = poster,
+                synopsis = o["shortDescription"].string()?.takeIf { it.isNotBlank() }
+                    ?: o["teaserText"].string()?.takeIf { it.isNotBlank() },
                 availabilityType = AvailabilityType.FREE_ADS,
             )
         }

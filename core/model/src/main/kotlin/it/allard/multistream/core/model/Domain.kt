@@ -58,6 +58,7 @@ data class UnifiedSearchResult(
     val type: MediaType,
     val year: Int? = null,
     val posterUrl: String? = null,
+    val synopsis: String? = null,
     val availabilityType: AvailabilityType = AvailabilityType.UNKNOWN,
     val externalIds: ExternalIds = ExternalIds(),
 )

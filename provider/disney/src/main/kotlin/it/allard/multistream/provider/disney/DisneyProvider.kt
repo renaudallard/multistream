@@ -6,6 +6,7 @@ import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
+import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
@@ -41,6 +42,12 @@ class DisneyProvider(
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
         val token = accessToken ?: return emptyList()
         return runCatching { api.getSeasons(ref.providerTitleId, token) }.getOrDefault(emptyList())
+    }
+
+    override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? {
+        if (ensureSession(config) !is SessionState.Ready) return null
+        val token = accessToken ?: return null
+        return runCatching { api.getDetails(ref.providerTitleId, token, ref) }.getOrNull()
     }
 
     override suspend fun login(username: String, password: String): ProviderSecrets {

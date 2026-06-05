@@ -1,5 +1,7 @@
 package it.allard.multistream.provider.disney
 
+import it.allard.multistream.core.model.ProviderRef
+import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
@@ -72,6 +74,12 @@ class DisneyApi(
             }.getOrDefault(emptyList())
             Season(season.number, season.name, episodes)
         }
+    }
+
+    /** Synopsis, release year and cast from the same entity page used for seasons. */
+    suspend fun getDetails(entityId: String, accessToken: String, ref: ProviderRef): ProviderTitleDetails? {
+        val page = execContentGet("$apiBase/explore/v1.9/page/entity-$entityId", accessToken)
+        return DisneyParser.parseDetails(page, ref)
     }
 
     private suspend fun obtainClientApiKey(): String {

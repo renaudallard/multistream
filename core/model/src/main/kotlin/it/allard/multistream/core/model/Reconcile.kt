@@ -154,6 +154,7 @@ private fun toTitle(members: List<UnifiedSearchResult>, priority: List<ProviderI
         type = primary.type,
         year = year,
         posterUrl = ordered.firstNotNullOfOrNull { it.posterUrl },
+        synopsis = ordered.firstNotNullOfOrNull { it.synopsis },
         externalIds = external,
         availabilities = availabilities,
     )

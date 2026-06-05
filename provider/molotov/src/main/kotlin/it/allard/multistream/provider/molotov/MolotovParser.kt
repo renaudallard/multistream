@@ -6,6 +6,7 @@ import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.UnifiedSearchResult
+import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -57,6 +58,8 @@ object MolotovParser {
             title = title,
             type = media,
             posterUrl = posterImage(tile["image_bundle"]),
+            synopsis = tile["description"].string()?.takeIf { it.isNotBlank() }
+                ?: tile["description_formatter"].obj()?.get("format").string()?.takeIf { it.isNotBlank() },
             availabilityType = if (media == MediaType.LIVE_CHANNEL) AvailabilityType.LIVE else AvailabilityType.SUBSCRIPTION,
         )
     }

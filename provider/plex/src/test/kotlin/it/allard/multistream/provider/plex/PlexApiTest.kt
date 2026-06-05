@@ -1,6 +1,8 @@
 package it.allard.multistream.provider.plex
 
 import it.allard.multistream.core.model.MediaType
+import it.allard.multistream.core.model.ProviderId
+import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.net.buildClient
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
@@ -98,6 +100,20 @@ class PlexApiTest {
         val request = server.takeRequest()
         assertTrue(request.path!!.contains("/hubs/search?query=batman"))
         assertEquals("TKN", request.getHeader("X-Plex-Token"))
+    }
+
+    @Test fun getDetails_parsesSummaryYearAndCast() = runBlocking {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"MediaContainer":{"Metadata":[{"title":"The Batman","type":"movie","year":2022,"summary":"A detective hunts a killer.","Role":[{"tag":"Robert Pattinson"},{"tag":"Zoe Kravitz"}]}]}}""",
+            ),
+        )
+        val base = server.url("/").toString().removeSuffix("/")
+        val details = api.getDetails(base, "TKN", "42", ProviderRef(ProviderId.PLEX, "42", null))
+        assertEquals("A detective hunts a killer.", details?.synopsis)
+        assertEquals(2022, details?.year)
+        assertEquals(listOf("Robert Pattinson", "Zoe Kravitz"), details?.cast)
+        assertTrue(server.takeRequest().path!!.contains("/library/metadata/42"))
     }
 
     @Test fun verifyServer_failsOnUnauthorizedToken() = runBlocking {
