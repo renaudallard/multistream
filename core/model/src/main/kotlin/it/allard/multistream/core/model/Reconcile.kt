@@ -3,11 +3,14 @@ package it.allard.multistream.core.model
 import java.text.Normalizer
 import kotlin.math.abs
 
+// Leading articles dropped before matching. Single-letter ones (en "a", fr "l", it "i") are left out
+// on purpose: they collide with the English pronoun "I" and "A."/"L." initials, mangling titles like
+// "I, Robot" or "L.A. Confidential".
 private val ARTICLES = setOf(
-    "the", "a", "an", // en
-    "le", "la", "les", "l", "un", "une", "des", // fr
+    "the", "an", // en
+    "le", "la", "les", "un", "une", "des", // fr
     "der", "die", "das", "ein", "eine", // de
-    "il", "lo", "gli", "i", "uno", "una", // it
+    "il", "lo", "gli", "uno", "una", // it
 )
 
 private val DIACRITICS = Regex("\\p{Mn}+")

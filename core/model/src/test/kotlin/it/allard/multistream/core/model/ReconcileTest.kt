@@ -11,6 +11,9 @@ class ReconcileTest {
         assertEquals("bureau des legendes", normalizeTitle("Le Bureau des Légendes"))
         assertEquals("spider man no way home", normalizeTitle("Spider-Man: No Way Home"))
         assertEquals("squid game", normalizeTitle("  Squid   Game  "))
+        // single-letter words are not articles: keep the English pronoun "I" and "A."/"L." initials
+        assertEquals("i robot", normalizeTitle("I, Robot"))
+        assertEquals("i am legend", normalizeTitle("I Am Legend"))
     }
 
     private fun result(
