@@ -16,12 +16,14 @@ import kotlinx.serialization.json.JsonObject
  * title and an id, so it handles both Discover (MediaContainer.SearchResults[].SearchResult[].Metadata)
  * and a Plex Media Server's search (MediaContainer.Hub[].Metadata[]). A `slug` yields a watch.plex.tv
  * deep link; server items have none and fall back to launching the Plex app. A server item's `thumb`
- * is a path on the server, so [imageBase] and [token] turn it into a loadable URL.
+ * is a path on the server, so [imageBase] turns it into a loadable URL; the server access token is
+ * never put in the URL (it would land in the database and the image cache) and is instead added as an
+ * X-Plex-Token request header at load time via PlexImageAuth.
  */
 object PlexParser {
-    fun parse(root: JsonObject, imageBase: String? = null, token: String? = null): List<UnifiedSearchResult> {
+    fun parse(root: JsonObject, imageBase: String? = null): List<UnifiedSearchResult> {
         val out = LinkedHashMap<String, UnifiedSearchResult>()
-        collect(root, out, imageBase, token)
+        collect(root, out, imageBase)
         return out.values.toList()
     }
 
@@ -29,7 +31,6 @@ object PlexParser {
         element: JsonElement,
         out: MutableMap<String, UnifiedSearchResult>,
         imageBase: String?,
-        token: String?,
     ) {
         when (element) {
             is JsonObject -> {
@@ -48,22 +49,22 @@ object PlexParser {
                             title = title,
                             type = if (isShow) MediaType.SERIES else MediaType.MOVIE,
                             year = element["year"].int(),
-                            posterUrl = posterUrl(element["thumb"].string(), imageBase, token),
+                            posterUrl = posterUrl(element["thumb"].string(), imageBase),
                             availabilityType = AvailabilityType.UNKNOWN,
                         ),
                     )
                 }
-                element.values.forEach { collect(it, out, imageBase, token) }
+                element.values.forEach { collect(it, out, imageBase) }
             }
-            is JsonArray -> element.forEach { collect(it, out, imageBase, token) }
+            is JsonArray -> element.forEach { collect(it, out, imageBase) }
             else -> Unit
         }
     }
 
-    private fun posterUrl(thumb: String?, imageBase: String?, token: String?): String? = when {
+    private fun posterUrl(thumb: String?, imageBase: String?): String? = when {
         thumb.isNullOrBlank() -> null
         thumb.startsWith("http") -> thumb
-        imageBase != null && token != null -> "${imageBase.trimEnd('/')}$thumb?X-Plex-Token=$token"
+        imageBase != null -> "${imageBase.trimEnd('/')}$thumb"
         else -> null
     }
 }

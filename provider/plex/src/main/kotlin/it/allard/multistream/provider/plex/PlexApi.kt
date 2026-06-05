@@ -134,7 +134,9 @@ class PlexApi(
             if (response.code == 401) throw PlexApiException("Unauthorized", authError = true)
             if (!response.isSuccessful) throw PlexApiException("HTTP ${response.code}")
             val root = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj() ?: return emptyList()
-            return PlexParser.parse(root, imageBase = serverUrl, token = token)
+            // Make the token available to the image loader by host, then build token-less poster URLs.
+            PlexImageAuth.register(serverUrl, token)
+            return PlexParser.parse(root, imageBase = serverUrl)
         }
     }
 

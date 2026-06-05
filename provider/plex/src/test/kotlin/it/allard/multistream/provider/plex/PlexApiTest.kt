@@ -95,7 +95,8 @@ class PlexApiTest {
         val results = api.searchServer(base, "TKN", "batman")
         assertEquals(2, results.size)
         assertEquals(2022, results.first { it.title == "The Batman" }.year)
-        assertEquals("$base/library/metadata/42/thumb/1?X-Plex-Token=TKN", results.first { it.title == "The Batman" }.posterUrl)
+        // The poster URL carries no token; PlexImageAuth adds X-Plex-Token as a header at load time.
+        assertEquals("$base/library/metadata/42/thumb/1", results.first { it.title == "The Batman" }.posterUrl)
         assertEquals(MediaType.SERIES, results.first { it.title == "Gotham" }.type)
         val request = server.takeRequest()
         assertTrue(request.path!!.contains("/hubs/search?query=batman"))
