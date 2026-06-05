@@ -59,22 +59,22 @@ class WatchRepository(private val db: MultistreamDatabase) {
 
     suspend fun ensureTracked(title: Title) {
         val key = title.key.serialize()
-        if (dao.getTitle(key) == null) {
-            val now = now()
-            dao.upsertTitle(
-                TrackedTitleEntity(
-                    titleKey = key,
-                    primaryTitle = title.primaryTitle,
-                    year = title.year,
-                    type = title.type.name,
-                    posterUrl = title.posterUrl,
-                    status = WatchStatus.UNWATCHED.name,
-                    inWatchlist = false,
-                    addedAt = now,
-                    updatedAt = now,
-                ),
-            )
-        }
+        val now = now()
+        // INSERT OR IGNORE creates the row only if absent, atomically, so a concurrent ensureTracked
+        // for a brand-new title can't reset a status or watchlist flag the other caller just set.
+        dao.insertTitleIfAbsent(
+            TrackedTitleEntity(
+                titleKey = key,
+                primaryTitle = title.primaryTitle,
+                year = title.year,
+                type = title.type.name,
+                posterUrl = title.posterUrl,
+                status = WatchStatus.UNWATCHED.name,
+                inWatchlist = false,
+                addedAt = now,
+                updatedAt = now,
+            ),
+        )
         // Persist where the title can be launched so Library can open it after a process restart,
         // when the in-memory search index is gone.
         if (title.availabilities.isNotEmpty()) {

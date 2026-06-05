@@ -1,13 +1,15 @@
 package it.allard.multistream.core.data.db
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface WatchDao {
-    @Upsert suspend fun upsertTitle(title: TrackedTitleEntity)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertTitleIfAbsent(title: TrackedTitleEntity)
 
     @Upsert suspend fun upsertEpisode(episode: EpisodeProgressEntity)
 
@@ -23,9 +25,6 @@ interface WatchDao {
 
     @Query("UPDATE tracked_title SET status = :status, updatedAt = :ts WHERE titleKey = :key")
     suspend fun setStatus(key: String, status: String, ts: Long)
-
-    @Query("SELECT * FROM tracked_title WHERE titleKey = :key")
-    suspend fun getTitle(key: String): TrackedTitleEntity?
 
     @Query("SELECT * FROM tracked_title WHERE titleKey = :key")
     fun observeTitle(key: String): Flow<TrackedTitleEntity?>
