@@ -78,16 +78,20 @@ suspend fun OkHttpClient.await(request: Request): Response {
             }
 
             override fun onResponse(call: Call, response: Response) {
-                try {
-                    val buffered = response.use {
+                // Catch every throwable (a malformed or oversized body can raise more than an
+                // IOException, e.g. OutOfMemoryError from bytes()); otherwise it escapes onto OkHttp's
+                // dispatcher thread and the continuation is never resumed, hanging the caller forever.
+                val buffered = try {
+                    response.use {
                         val type = it.body?.contentType()
                         val bytes = it.body?.bytes() ?: ByteArray(0)
                         it.newBuilder().body(bytes.toResponseBody(type)).build()
                     }
-                    cont.resume(buffered)
-                } catch (e: IOException) {
+                } catch (e: Throwable) {
                     if (!cont.isCancelled) cont.resumeWithException(e)
+                    return
                 }
+                if (!cont.isCancelled) cont.resume(buffered)
             }
         })
     }
