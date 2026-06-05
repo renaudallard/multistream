@@ -24,7 +24,9 @@ class SecretStore(context: Context) {
     private val prefs: SharedPreferences? = createEncryptedPrefs(context.applicationContext)
 
     fun read(provider: ProviderId): ProviderSecrets {
-        val store = prefs ?: return memory[provider.name] ?: ProviderSecrets.EMPTY
+        // memory holds writes that couldn't reach the encrypted store, so it takes precedence.
+        memory[provider.name]?.let { return it }
+        val store = prefs ?: return ProviderSecrets.EMPTY
         return store.getString(provider.name, null)
             ?.let { runCatching { json.decodeFromString<ProviderSecrets>(it) }.getOrNull() }
             ?: ProviderSecrets.EMPTY
@@ -37,6 +39,7 @@ class SecretStore(context: Context) {
             return
         }
         runCatching { store.edit().putString(provider.name, json.encodeToString(secrets)).apply() }
+            .onSuccess { memory.remove(provider.name) } // store is now authoritative; drop any stale fallback
             .onFailure { memory[provider.name] = secrets }
     }
 
