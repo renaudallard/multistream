@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
-import java.util.concurrent.ConcurrentHashMap
+import java.util.Collections
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -38,7 +38,12 @@ class SearchInteractor(
     private val settings: SettingsRepository,
     private val secrets: SecretStore,
 ) {
-    private val index = ConcurrentHashMap<String, Title>()
+    // Bounded LRU: the resolve-by-key cache for clicked results must not grow for the whole process.
+    private val index: MutableMap<String, Title> = Collections.synchronizedMap(
+        object : LinkedHashMap<String, Title>(16, 0.75f, true) {
+            override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Title>?): Boolean = size > INDEX_CAPACITY
+        },
+    )
 
     fun search(query: String): Flow<SearchUpdate> = channelFlow {
         val providers = registry.searchable()
@@ -152,5 +157,6 @@ class SearchInteractor(
 
     private companion object {
         const val PROVIDER_TIMEOUT_MS = 8_000L
+        const val INDEX_CAPACITY = 500
     }
 }
