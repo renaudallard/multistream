@@ -40,31 +40,14 @@ class MolotovProvider(
     override suspend fun login(username: String, password: String): ProviderSecrets {
         val tokens = api.login(username, password)
         accessToken = tokens.accessToken
-        return ProviderSecrets(
-            token = tokens.accessToken,
-            refreshToken = tokens.refreshToken,
-            extra = buildMap {
-                put("email", username)
-                put("password", password)
-                tokens.userId?.let { put("user_id", it) }
-            },
-        )
+        // The password is never stored: only the access and refresh tokens are persisted.
+        return ProviderSecrets(token = tokens.accessToken, refreshToken = tokens.refreshToken)
     }
 
     override suspend fun ensureSession(config: ProviderConfig): SessionState {
         if (accessToken == null) accessToken = config.secrets.token
-        if (accessToken != null) return SessionState.Ready
-
-        val email = config.secrets.extra["email"]
-        val password = config.secrets.extra["password"]
-        if (email != null && password != null) {
-            return runCatching { login(email, password) }
-                .fold(
-                    { fresh -> config.persistSecrets?.invoke(fresh); SessionState.Ready },
-                    { SessionState.NeedsLogin(it.message ?: "Login failed") },
-                )
-        }
-        return SessionState.NeedsLogin("Molotov login required")
+        // No stored password to fall back on, so a missing token means the user must re-login.
+        return if (accessToken != null) SessionState.Ready else SessionState.NeedsLogin("Molotov login required")
     }
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
@@ -79,24 +62,24 @@ class MolotovProvider(
 
     private suspend fun retryAfterAuth(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         val tokens = runCatching { config.secrets.refreshToken?.let { api.refresh(it) } }.getOrNull()
-            ?: runCatching {
-                val email = config.secrets.extra["email"]
-                val password = config.secrets.extra["password"]
-                if (email != null && password != null) api.login(email, password) else null
-            }.getOrNull()
-            ?: return emptyList()
+        if (tokens == null) {
+            // No password is stored, so we cannot silently re-login: clear the dead session so the
+            // user shows as logged out and can sign in again from Settings.
+            accessToken = null
+            config.persistSecrets?.invoke(ProviderSecrets.EMPTY)
+            return emptyList()
+        }
         accessToken = tokens.accessToken
         persistRotated(tokens, config)
         return runCatching { api.search(query, tokens.accessToken, region) }.getOrDefault(emptyList())
     }
 
-    /** Persist a refreshed or re-logged-in session so the rotated refresh token survives a restart. */
+    /** Persist a refreshed session so the rotated refresh token survives a restart. */
     private fun persistRotated(tokens: MolotovTokens, config: ProviderConfig) {
         config.persistSecrets?.invoke(
             ProviderSecrets(
                 token = tokens.accessToken,
                 refreshToken = tokens.refreshToken ?: config.secrets.refreshToken,
-                extra = config.secrets.extra,
             ),
         )
     }

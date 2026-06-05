@@ -50,31 +50,17 @@ class DisneyProvider(
     override suspend fun login(username: String, password: String): ProviderSecrets {
         val tokens = api.login(username, password)
         accessToken = tokens.accessToken
-        return ProviderSecrets(
-            token = tokens.accessToken,
-            refreshToken = tokens.refreshToken,
-            extra = mapOf("email" to username, "password" to password),
-        )
+        // The password is never stored: only the access and refresh tokens are persisted.
+        return ProviderSecrets(token = tokens.accessToken, refreshToken = tokens.refreshToken)
     }
 
     override suspend fun ensureSession(config: ProviderConfig): SessionState {
         accessToken?.let { return SessionState.Ready }
         return sessionMutex.withLock {
-            // Re-check inside the lock: a concurrent caller may have logged in while we waited, so we
-            // do not start a second login.
+            // Re-check inside the lock: a concurrent caller may have established the session while we
+            // waited. There is no stored password to fall back on, so a missing token means re-login.
             if (accessToken == null) accessToken = config.secrets.token
-            accessToken?.let { return@withLock SessionState.Ready }
-            val email = config.secrets.extra["email"]
-            val password = config.secrets.extra["password"]
-            if (email != null && password != null) {
-                runCatching { login(email, password) }
-                    .fold(
-                        { fresh -> config.persistSecrets?.invoke(fresh); SessionState.Ready },
-                        { SessionState.NeedsLogin(it.message ?: "Login failed") },
-                    )
-            } else {
-                SessionState.NeedsLogin("Disney+ login required")
-            }
+            if (accessToken != null) SessionState.Ready else SessionState.NeedsLogin("Disney+ login required")
         }
     }
 
@@ -105,24 +91,24 @@ class DisneyProvider(
         // Another caller may have refreshed while we waited for the lock.
         accessToken?.let { if (it != staleToken) return@withLock it }
         val tokens = runCatching { config.secrets.refreshToken?.let { api.refresh(it) } }.getOrNull()
-            ?: runCatching {
-                val email = config.secrets.extra["email"]
-                val password = config.secrets.extra["password"]
-                if (email != null && password != null) api.login(email, password) else null
-            }.getOrNull()
-            ?: return@withLock null
+        if (tokens == null) {
+            // No password is stored, so we cannot silently re-login: clear the dead session so the
+            // user shows as logged out and can sign in again from Settings.
+            accessToken = null
+            config.persistSecrets?.invoke(ProviderSecrets.EMPTY)
+            return@withLock null
+        }
         accessToken = tokens.accessToken
         persistRotated(tokens, config)
         tokens.accessToken
     }
 
-    /** Persist a refreshed or re-logged-in session so the rotated refresh token survives a restart. */
+    /** Persist a refreshed session so the rotated refresh token survives a restart. */
     private fun persistRotated(tokens: DisneyTokens, config: ProviderConfig) {
         config.persistSecrets?.invoke(
             ProviderSecrets(
                 token = tokens.accessToken,
                 refreshToken = tokens.refreshToken ?: config.secrets.refreshToken,
-                extra = config.secrets.extra,
             ),
         )
     }
