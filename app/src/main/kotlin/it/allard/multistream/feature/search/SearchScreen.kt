@@ -74,7 +74,7 @@ fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
             keyboardActions = KeyboardActions(onSearch = { viewModel.submit() }),
             trailingIcon = {
                 IconButton(onClick = viewModel::submit) {
-                    Icon(Icons.Default.Search, contentDescription = "Search")
+                    Icon(Icons.Default.Search, contentDescription = stringResource(R.string.tab_search))
                 }
             },
             modifier = Modifier.fillMaxWidth(),
@@ -89,12 +89,12 @@ fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
                 TitleCard(title) { onOpenTitle(title.key) }
             }
             if (state.searched && state.results.isEmpty() && !state.loading) {
-                item { Text("No catalog matches yet.", style = MaterialTheme.typography.bodyMedium) }
+                item { Text(stringResource(R.string.search_no_matches), style = MaterialTheme.typography.bodyMedium) }
             }
             if (state.searched && state.degrade.isNotEmpty()) {
                 item {
                     Text(
-                        text = "Search directly in:",
+                        text = stringResource(R.string.search_direct_in),
                         style = MaterialTheme.typography.titleSmall,
                         modifier = Modifier.padding(top = 8.dp),
                     )
@@ -104,11 +104,13 @@ fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
                         headlineContent = { Text(provider.displayName) },
                         supportingContent = {
                             Text(
-                                if (provider.capabilities.canInAppSearchDeepLink) "Opens in-app search" else "Opens the app",
+                                stringResource(
+                                    if (provider.capabilities.canInAppSearchDeepLink) R.string.search_opens_in_app else R.string.search_opens_app,
+                                ),
                             )
                         },
                         trailingContent = {
-                            TextButton(onClick = { viewModel.openInApp(provider) }) { Text("Open") }
+                            TextButton(onClick = { viewModel.openInApp(provider) }) { Text(stringResource(R.string.action_open)) }
                         },
                     )
                 }

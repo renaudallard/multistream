@@ -1,7 +1,9 @@
 package it.allard.multistream.feature.settings
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import it.allard.multistream.R
 import it.allard.multistream.core.data.SecretStore
 import it.allard.multistream.core.data.SettingsRepository
 import it.allard.multistream.core.model.ProviderId
@@ -23,6 +25,7 @@ import kotlin.coroutines.cancellation.CancellationException
 class SettingsViewModel(
     private val registry: ProviderRegistry,
     private val settings: SettingsRepository,
+    private val appContext: Context,
     // A lazy accessor: resolving it builds the Keystore-backed store, which must not run on the main
     // thread, so the first touch happens inside the IO coroutine below.
     private val secrets: () -> SecretStore,
@@ -71,7 +74,11 @@ class SettingsViewModel(
 
     fun login(provider: StreamingProvider, email: String, password: String) {
         if (email.isBlank() || password.isBlank()) {
-            _message.value = "Enter ${provider.capabilities.loginUserLabel} and ${provider.capabilities.loginPassLabel}"
+            _message.value = appContext.getString(
+                R.string.msg_enter_credentials,
+                provider.capabilities.loginUserLabel,
+                provider.capabilities.loginPassLabel,
+            )
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
@@ -81,9 +88,13 @@ class SettingsViewModel(
             }
             if (result.isSuccess) {
                 _loggedIn.update { it + (provider.id to true) }
-                _message.value = "${provider.displayName}: logged in"
+                _message.value = appContext.getString(R.string.msg_logged_in, provider.displayName)
             } else {
-                _message.value = "${provider.displayName}: ${result.exceptionOrNull()?.message ?: "login failed"}"
+                _message.value = appContext.getString(
+                    R.string.msg_status,
+                    provider.displayName,
+                    result.exceptionOrNull()?.message ?: appContext.getString(R.string.msg_login_failed),
+                )
             }
         }
     }
@@ -96,22 +107,26 @@ class SettingsViewModel(
             }
             if (result.isSuccess) {
                 _loggedIn.update { it + (provider.id to true) }
-                _message.value = "${provider.displayName}: logged in"
+                _message.value = appContext.getString(R.string.msg_logged_in, provider.displayName)
             } else {
-                _message.value = "${provider.displayName}: ${result.exceptionOrNull()?.message ?: "login failed"}"
+                _message.value = appContext.getString(
+                    R.string.msg_status,
+                    provider.displayName,
+                    result.exceptionOrNull()?.message ?: appContext.getString(R.string.msg_login_failed),
+                )
             }
         }
     }
 
     fun startLink(provider: StreamingProvider) {
         if (linkJob?.isActive == true || _linkPrompt.value != null) {
-            _message.value = "Finish the current linking first"
+            _message.value = appContext.getString(R.string.msg_linking_in_progress)
             return
         }
         linkJob = viewModelScope.launch(Dispatchers.IO) {
             val session = runCatching { provider.beginLink() }.getOrNull()
             if (session == null) {
-                _message.value = "${provider.displayName}: linking unavailable"
+                _message.value = appContext.getString(R.string.msg_linking_unavailable, provider.displayName)
                 return@launch
             }
             _linkPrompt.value = LinkPrompt(provider.id, session.code, session.verificationUrl)
@@ -126,9 +141,9 @@ class SettingsViewModel(
             if (secret != null) {
                 secrets().write(provider.id, secret)
                 _loggedIn.update { it + (provider.id to true) }
-                _message.value = "${provider.displayName}: linked"
+                _message.value = appContext.getString(R.string.msg_linked, provider.displayName)
             } else {
-                _message.value = "${provider.displayName}: linking timed out — try again"
+                _message.value = appContext.getString(R.string.msg_linking_timed_out, provider.displayName)
             }
         }
     }
@@ -144,7 +159,7 @@ class SettingsViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             secrets().clear(provider.id)
             _loggedIn.update { it + (provider.id to false) }
-            _message.value = "${provider.displayName}: logged out"
+            _message.value = appContext.getString(R.string.msg_logged_out, provider.displayName)
         }
     }
 

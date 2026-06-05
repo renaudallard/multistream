@@ -27,7 +27,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import it.allard.multistream.R
 import it.allard.multistream.core.data.db.WatchStatus
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
@@ -60,12 +62,12 @@ fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TextButton(onClick = onBack) { Text("← Back") }
+        TextButton(onClick = onBack) { Text(stringResource(R.string.action_back)) }
 
         val title = state.title
         when {
             state.loading -> CircularProgressIndicator()
-            title == null -> Text("Title not found.")
+            title == null -> Text(stringResource(R.string.detail_title_not_found))
             else -> {
                 Row {
                     PosterImage(title.posterUrl, Modifier.size(width = 100.dp, height = 150.dp))
@@ -91,14 +93,14 @@ fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
                 title.synopsis?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
                 if (title.cast.isNotEmpty()) {
                     Text(
-                        "Cast: ${title.cast.take(8).joinToString(", ")}",
+                        stringResource(R.string.detail_cast, title.cast.take(8).joinToString(", ")),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
 
                 TextButton(onClick = viewModel::toggleWatchlist) {
-                    Text(if (state.inWatchlist) "In Watchlist ✓" else "Add to Watchlist")
+                    Text(stringResource(if (state.inWatchlist) R.string.detail_in_watchlist else R.string.detail_add_to_watchlist))
                 }
 
                 title.availabilities.forEach { availability ->
@@ -107,24 +109,24 @@ fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
                         onClick = { viewModel.launch(availability) },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Play on ${provider?.displayName ?: availability.provider.name}")
+                        Text(stringResource(R.string.detail_play_on, provider?.displayName ?: availability.provider.name))
                     }
                 }
 
                 if (title.type == MediaType.MOVIE) {
                     FilledTonalButton(onClick = viewModel::toggleMovieWatched, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (state.status == WatchStatus.WATCHED) "Watched ✓" else "Mark watched")
+                        Text(stringResource(if (state.status == WatchStatus.WATCHED) R.string.detail_watched else R.string.detail_mark_watched))
                     }
                 } else {
                     state.nextEpisode?.let { next ->
                         FilledTonalButton(onClick = viewModel::resume, modifier = Modifier.fillMaxWidth()) {
-                            Text("Resume S${next.season}E${next.episode}")
+                            Text(stringResource(R.string.detail_resume_episode, next.season, next.episode))
                         }
                     }
                     Spacer(Modifier.height(8.dp))
                     title.seasons.forEach { season ->
                         Text(
-                            season.title ?: "Season ${season.seasonNumber}",
+                            season.title ?: stringResource(R.string.detail_season_number, season.seasonNumber),
                             style = MaterialTheme.typography.titleMedium,
                         )
                         season.episodes.forEach { episode ->

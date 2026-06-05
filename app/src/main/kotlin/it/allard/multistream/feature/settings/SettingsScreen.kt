@@ -38,9 +38,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import it.allard.multistream.R
 import it.allard.multistream.WebLoginActivity
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.di.LocalAppGraph
@@ -52,7 +54,8 @@ import it.allard.multistream.ui.appViewModel
 @Composable
 fun SettingsScreen() {
     val graph = LocalAppGraph.current
-    val viewModel = appViewModel { SettingsViewModel(graph.registry, graph.settings) { graph.secrets } }
+    val appContext = LocalContext.current.applicationContext
+    val viewModel = appViewModel { SettingsViewModel(graph.registry, graph.settings, appContext) { graph.secrets } }
     val rows by viewModel.rows.collectAsState()
     val loggedIn by viewModel.loggedIn.collectAsState()
     val linkPrompt by viewModel.linkPrompt.collectAsState()
@@ -121,8 +124,8 @@ fun SettingsScreen() {
 private fun LoginSection(
     isLoggedIn: Boolean,
     webLoginSpec: WebLoginSpec?,
-    userLabel: String = "Email",
-    passLabel: String = "Password",
+    userLabel: String = stringResource(R.string.settings_label_email),
+    passLabel: String = stringResource(R.string.settings_label_password),
     optional: Boolean = false,
     linkLogin: Boolean = false,
     linkPrompt: SettingsViewModel.LinkPrompt? = null,
@@ -134,29 +137,29 @@ private fun LoginSection(
 ) {
     if (isLoggedIn) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            Text("Logged in ✓", style = MaterialTheme.typography.bodyMedium)
-            TextButton(onClick = onLogout) { Text("Log out") }
+            Text(stringResource(R.string.settings_logged_in), style = MaterialTheme.typography.bodyMedium)
+            TextButton(onClick = onLogout) { Text(stringResource(R.string.settings_log_out)) }
         }
         return
     }
     if (optional) {
-        Text("Optional — search works without logging in.", style = MaterialTheme.typography.labelSmall)
+        Text(stringResource(R.string.settings_login_optional), style = MaterialTheme.typography.labelSmall)
         Spacer(Modifier.height(4.dp))
     }
     if (linkLogin) {
         val context = LocalContext.current
         if (linkPrompt != null) {
-            Text("Approve the sign-in in your browser, then come back here.", style = MaterialTheme.typography.bodyMedium)
+            Text(stringResource(R.string.settings_link_approve), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(4.dp))
             Button(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(linkPrompt.url))) }) {
-                Text("Open Plex sign-in")
+                Text(stringResource(R.string.settings_link_open_signin))
             }
             Spacer(Modifier.height(4.dp))
-            Text("Waiting for you to approve…", style = MaterialTheme.typography.labelSmall)
+            Text(stringResource(R.string.settings_link_waiting), style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.height(4.dp))
-            OutlinedButton(onClick = onCancelLink) { Text("Cancel") }
+            OutlinedButton(onClick = onCancelLink) { Text(stringResource(R.string.settings_link_cancel)) }
         } else {
-            Button(onClick = onStartLink) { Text("Link account") }
+            Button(onClick = onStartLink) { Text(stringResource(R.string.settings_link_account)) }
         }
         return
     }
@@ -183,7 +186,7 @@ private fun LoginSection(
                 )
             },
         ) {
-            Text("Log in (browser)")
+            Text(stringResource(R.string.settings_log_in_browser))
         }
         return
     }
@@ -208,15 +211,16 @@ private fun LoginSection(
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(4.dp))
-    Button(onClick = { onLogin(email, password) }) { Text("Log in") }
+    Button(onClick = { onLogin(email, password) }) { Text(stringResource(R.string.settings_log_in)) }
 }
 
+@Composable
 private fun capabilitySummary(capabilities: ProviderCapabilities): String = buildList {
-    add(if (capabilities.canSearch) "Search" else "Launch only")
-    if (capabilities.canDeepLinkToTitle) add("Deep link")
-    if (capabilities.isLiveTv) add("Live TV")
-    if (capabilities.requiresAuth) add("Login")
-    if (capabilities.optionalLogin) add("Login optional")
+    add(stringResource(if (capabilities.canSearch) R.string.capability_search else R.string.capability_launch_only))
+    if (capabilities.canDeepLinkToTitle) add(stringResource(R.string.capability_deep_link))
+    if (capabilities.isLiveTv) add(stringResource(R.string.capability_live_tv))
+    if (capabilities.requiresAuth) add(stringResource(R.string.capability_login))
+    if (capabilities.optionalLogin) add(stringResource(R.string.capability_login_optional))
 }.joinToString(" · ")
 
 private fun regionOptions(provider: StreamingProvider): List<Region> {
@@ -229,7 +233,7 @@ private fun RegionSelector(current: Region?, options: List<Region>, onSelect: (R
     var expanded by remember { mutableStateOf(false) }
     Box {
         TextButton(onClick = { expanded = true }) {
-            Text("Region: ${current?.code ?: "not set"}")
+            Text(stringResource(R.string.settings_region, current?.code ?: stringResource(R.string.settings_region_not_set)))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEach { region ->

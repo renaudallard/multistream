@@ -2,6 +2,7 @@ package it.allard.multistream.launch
 
 import android.content.Context
 import android.content.Intent
+import it.allard.multistream.R
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.provider.api.LaunchAction
@@ -26,12 +27,16 @@ class LaunchController(context: Context) {
     ): String = withContext(Dispatchers.IO) {
         when (val action = LaunchResolver.resolve(appContext, provider, ref, episode, query)) {
             is LaunchAction.Start ->
-                if (startSafely(action.intent)) "Opening ${provider.displayName}…" else "Couldn't open ${provider.displayName}"
+                if (startSafely(action.intent)) {
+                    appContext.getString(R.string.launch_opening, provider.displayName)
+                } else {
+                    appContext.getString(R.string.launch_cant_open, provider.displayName)
+                }
             is LaunchAction.Install -> {
                 openStore(action.packageName)
-                "${provider.displayName} isn't installed"
+                appContext.getString(R.string.launch_not_installed, provider.displayName)
             }
-            LaunchAction.Unavailable -> "Couldn't open ${provider.displayName}"
+            LaunchAction.Unavailable -> appContext.getString(R.string.launch_cant_open, provider.displayName)
         }
     }
 
@@ -39,14 +44,14 @@ class LaunchController(context: Context) {
     suspend fun openApp(provider: StreamingProvider, query: String? = null): String = withContext(Dispatchers.IO) {
         if (!Launcher.isInstalled(appContext, provider.packageName)) {
             openStore(provider.packageName)
-            return@withContext "${provider.displayName} isn't installed"
+            return@withContext appContext.getString(R.string.launch_not_installed, provider.displayName)
         }
         val intent = provider.launchAppFallback(appContext, query)
             ?: Launcher.launchApp(appContext, provider.packageName)
         if (intent != null && startSafely(intent)) {
-            "Opening ${provider.displayName}…"
+            appContext.getString(R.string.launch_opening, provider.displayName)
         } else {
-            "Couldn't open ${provider.displayName}"
+            appContext.getString(R.string.launch_cant_open, provider.displayName)
         }
     }
 

@@ -21,7 +21,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import it.allard.multistream.R
 import it.allard.multistream.core.data.LibraryEntry
 import it.allard.multistream.core.model.TitleKey
 import it.allard.multistream.di.LocalAppGraph
@@ -46,17 +48,20 @@ fun LibraryScreen(onOpenTitle: (TitleKey) -> Unit) {
         }
     }
 
+    val continueTitle = stringResource(R.string.library_continue_watching)
+    val watchlistTitle = stringResource(R.string.library_watchlist)
+    val historyTitle = stringResource(R.string.library_history)
     LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        section("Continue Watching", continueWatching, viewModel::open, onOpenTitle)
-        section("Watchlist", watchlist, viewModel::open, onOpenTitle)
-        section("History", history, viewModel::open, onOpenTitle)
+        section(continueTitle, continueWatching, viewModel::open, onOpenTitle)
+        section(watchlistTitle, watchlist, viewModel::open, onOpenTitle)
+        section(historyTitle, history, viewModel::open, onOpenTitle)
         if (continueWatching.isEmpty() && watchlist.isEmpty() && history.isEmpty()) {
             item {
                 Text(
-                    "Nothing tracked yet. Search for a show, open it, and mark episodes watched.",
+                    stringResource(R.string.library_empty),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
@@ -97,8 +102,8 @@ private fun LibraryRow(entry: LibraryEntry, onOpen: () -> Unit, onDetail: () -> 
                 }
                 Text(sub, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = onDetail) { Text("Details") }
-            TextButton(onClick = onOpen) { Text("Open") }
+            TextButton(onClick = onDetail) { Text(stringResource(R.string.action_details)) }
+            TextButton(onClick = onOpen) { Text(stringResource(R.string.action_open)) }
         }
     }
 }
