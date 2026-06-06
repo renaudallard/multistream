@@ -7,6 +7,7 @@ import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.array
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import it.allard.multistream.core.net.await
 import it.allard.multistream.core.net.bool
 import it.allard.multistream.core.net.buildClient
@@ -66,7 +67,7 @@ class DisneyApi(
     suspend fun getSeasons(entityId: String, accessToken: String): List<Season> {
         val page = execContentGet("$apiBase/explore/v1.9/page/entity-$entityId", accessToken)
         return DisneyParser.parseSeasonRefs(page).map { season ->
-            val episodes = runCatching {
+            val episodes = runCatchingExceptCancellation {
                 DisneyParser.parseEpisodes(
                     execContentGet("$apiBase/explore/v1.7/season/${season.id}", accessToken),
                     season.number,
