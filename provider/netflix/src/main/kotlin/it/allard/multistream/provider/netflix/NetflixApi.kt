@@ -81,11 +81,10 @@ class NetflixApi(
     private suspend fun doFetchWatched(videoId: String): List<EpisodeCoord> {
         val current = session ?: prepareSession().also { session = it }
         val metadata = exec(metadataRequest(current, videoId))
-        // Log the raw payload once so the on-device run reveals the exact watch fields (bookmark/runtime)
-        // and lets the watched threshold be tuned; truncated to keep the log line readable.
-        Log.i(WATCH_TAG, "metadata $videoId: ${metadata.toString().take(4000)}")
         val watched = NetflixParser.parseWatchedEpisodes(metadata)
-        Log.i(WATCH_TAG, "parsed ${watched.size} watched episodes for $videoId: $watched")
+        // Compact diagnostic (resume offset / watched-to-end per episode) so a run can be tuned on
+        // device without dumping the whole payload.
+        Log.i(WATCH_TAG, "video $videoId watched=${watched.size}: $watched | ${NetflixParser.watchDebug(metadata)}")
         return watched
     }
 

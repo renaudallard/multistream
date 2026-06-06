@@ -1,5 +1,6 @@
 package it.allard.multistream.provider.netflix
 
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
@@ -115,6 +116,28 @@ class NetflixApiTest {
         assertEquals(30, seasons[0].episodes[0].runtimeMin)
         assertTrue(server.takeRequest().path!!.contains("/browse"))
         assertTrue(server.takeRequest().path!!.contains("/metadata?movieid=80057281"))
+    }
+
+    @Test fun fetchWatchedEpisodes_readsBookmarkOffsetAgainstWatchedToEnd() = runBlocking {
+        val memberApi = server.url("/api/shakti/BUILD").toString().removeSuffix("/")
+        server.enqueue(
+            MockResponse().setBody(
+                "<script>netflix.reactContext = {\"models\":{\"services\":{\"data\":{\"memberapi\":\"$memberApi\"}}," +
+                    "\"userInfo\":{\"data\":{\"authURL\":\"A\"}}}};</script>",
+            ),
+        )
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"video":{"seasons":[{"seq":1,"episodes":[
+                   {"seq":1,"runtime":1435,"watchedToEndOffset":1369,"bookmark":{"offset":1380}},
+                   {"seq":2,"runtime":1352,"watchedToEndOffset":1252,"bookmark":{"offset":400}},
+                   {"seq":3,"runtime":1400,"watchedToEndOffset":1300}
+                ]}]}}""".trimIndent(),
+            ),
+        )
+        // E1 finished (1380 >= 1369); E2 only partway (400 < 1252); E3 never started (no bookmark).
+        val watched = api.fetchWatchedEpisodes("80113701", "NetflixId=x")
+        assertEquals(listOf(EpisodeCoord(1, 1)), watched)
     }
 
     @Test fun getDetails_parsesSynopsisYearAndCast() = runBlocking {

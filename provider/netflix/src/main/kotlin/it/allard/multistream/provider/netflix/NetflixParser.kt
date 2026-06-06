@@ -128,9 +128,11 @@ object NetflixParser {
     }
 
     /**
-     * Episodes the member has watched, from the same /metadata response. Each episode carries a resume
-     * `bookmark` (seconds) for the logged-in member; an episode is treated as watched once the bookmark
-     * has reached at least 90% of its runtime.
+     * Episodes the member has watched, from the same /metadata response. Each episode carries the
+     * member's resume point as `bookmark.offset` (seconds; absent if never started) and a
+     * `watchedToEndOffset` marking where Netflix considers it finished (just before the credits). An
+     * episode counts as watched once the offset reaches that point; the credits offset, then 90% of
+     * runtime, are fallbacks.
      */
     fun parseWatchedEpisodes(root: JsonObject): List<EpisodeCoord> {
         val video = root["video"].obj() ?: root
@@ -141,12 +143,30 @@ object NetflixParser {
             seasonObj["episodes"].array()?.forEach { episode ->
                 val episodeObj = episode.obj() ?: return@forEach
                 val episodeSeq = episodeObj["seq"].int() ?: return@forEach
-                val bookmark = episodeObj["bookmark"].int() ?: 0
-                val runtime = episodeObj["runtime"].int() ?: 0
-                if (runtime > 0 && bookmark >= runtime * 9 / 10) out += EpisodeCoord(seasonSeq, episodeSeq)
+                val offset = episodeObj["bookmark"].obj()?.get("offset").int() ?: return@forEach
+                val watchedPoint = episodeObj["watchedToEndOffset"].int()
+                    ?: episodeObj["creditsOffset"].int()
+                    ?: ((episodeObj["runtime"].int() ?: 0) * 9 / 10)
+                if (watchedPoint > 0 && offset >= watchedPoint) out += EpisodeCoord(seasonSeq, episodeSeq)
             }
         }
         return out
+    }
+
+    /** Compact per-episode resume summary (`S1E1:offset/watchedToEndOffset`) for on-device diagnosis. */
+    fun watchDebug(root: JsonObject): String {
+        val video = root["video"].obj() ?: root
+        val sb = StringBuilder()
+        video["seasons"].array()?.forEach { season ->
+            val s = season.obj()?.get("seq").int()
+            season.obj()?.get("episodes").array()?.forEach { ep ->
+                val e = ep.obj()?.get("seq").int()
+                val offset = ep.obj()?.get("bookmark").obj()?.get("offset").int()
+                val watchedPoint = ep.obj()?.get("watchedToEndOffset").int()
+                sb.append("S${s}E$e:${offset ?: "-"}/${watchedPoint ?: "-"} ")
+            }
+        }
+        return sb.toString().trim()
     }
 
     /** Map each requested id to its poster url from a boxarts pathEvaluator response (portrait first). */
