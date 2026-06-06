@@ -21,6 +21,10 @@ object MolotovParser {
     private val CONTENT_TYPES = setOf("program", "vod", "episode", "season", "channel")
     private val CONTAINER_KEYS = listOf("sections", "items", "results", "catalog")
 
+    // A "program" tile covers both films and series; its metadata category tells them apart. Molotov's
+    // Films category is id 1 (verified against the live API), so a program in that category is a movie.
+    private const val FILM_CATEGORY_ID = "1"
+
     // Cap recursion depth so a deeply nested response can't overflow the stack.
     private const val MAX_DEPTH = 100
 
@@ -54,6 +58,8 @@ object MolotovParser {
             "vod" -> MediaType.MOVIE
             "episode" -> MediaType.EPISODE
             "channel" -> MediaType.LIVE_CHANNEL
+            // A program is a film only when its category says so; otherwise it is a series.
+            "program" -> if (isFilm(tile)) MediaType.MOVIE else MediaType.SERIES
             else -> MediaType.SERIES
         }
         return UnifiedSearchResult(
@@ -67,6 +73,10 @@ object MolotovParser {
             availabilityType = if (media == MediaType.LIVE_CHANNEL) AvailabilityType.LIVE else AvailabilityType.SUBSCRIPTION,
         )
     }
+
+    /** A program tile is a film when its metadata category is Molotov's Films category. */
+    private fun isFilm(tile: JsonObject): Boolean =
+        tile["metadata"].obj()?.get("program_category_id").string() == FILM_CATEGORY_ID
 
     private val IMAGE_SIZE = Regex("/(\\d+)x(\\d+)/")
 

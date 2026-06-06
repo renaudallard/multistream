@@ -62,6 +62,21 @@ class MolotovApiTest {
         assertEquals(MediaType.MOVIE, results.first { it.title == "OSS 117" }.type)
     }
 
+    @Test fun search_typesFilmProgramByCategory() = runBlocking {
+        // A "program" tile is a film or a series; its metadata category (Films is id 1) decides which.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"sections":[{"items":[
+                  {"type":"program","id":"p1","slug":"babas","title":"Les babas cool","metadata":{"program_category_id":"1","program_category":"Films"}},
+                  {"type":"program","id":"p2","slug":"lupin","title":"Lupin","metadata":{"program_category_id":"2","program_category":"Séries"}}
+                ]}]}""".trimIndent(),
+            ),
+        )
+        val results = api.search("x", "AT", Region.FR)
+        assertEquals(MediaType.MOVIE, results.first { it.title == "Les babas cool" }.type)
+        assertEquals(MediaType.SERIES, results.first { it.title == "Lupin" }.type)
+    }
+
     @Test fun search_doesNotCrashOnOversizedImageDimensions() = runBlocking {
         server.enqueue(
             MockResponse().setHeader("Content-Type", "application/json").setBody(
