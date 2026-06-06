@@ -13,8 +13,10 @@ import it.allard.multistream.core.model.rankByRelevance
 import it.allard.multistream.di.ProviderRegistry
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.ProducerScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.flowOn
@@ -22,7 +24,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.Collections
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.cancellation.CancellationException
 
 /** One emission of a streaming search: the titles merged so far, and whether more are pending. */
@@ -49,19 +50,26 @@ class SearchInteractor(
         val providers = registry.searchable()
         val accumulated = mutableListOf<UnifiedSearchResult>()
         synchronized(accumulated) { accumulated.addAll(SampleCatalog.search(query)) }
-        val remaining = AtomicInteger(providers.size)
 
         emit(query, accumulated, loading = providers.isNotEmpty())
-        for (provider in providers) {
-            launch {
-                val results = runProviderSearch(provider, query)
-                synchronized(accumulated) { accumulated.addAll(results) }
-                // Decide loading first, then snapshot: the last provider to finish (loading=false) then
-                // observes every other provider's results, so the final emission can't drop any.
-                val stillLoading = remaining.decrementAndGet() > 0
-                val snapshot = synchronized(accumulated) { accumulated.toList() }
-                send(SearchUpdate(mergeAndIndex(query, snapshot), loading = stillLoading))
+        // Each provider streams an incremental loading=true update as it returns; the parent waits for
+        // all of them and then sends one terminal loading=false snapshot. Keeping the final emission
+        // strictly last means a reordered child send can never leave the spinner stuck on.
+        coroutineScope {
+            for (provider in providers) {
+                launch {
+                    val results = runProviderSearch(provider, query)
+                    val snapshot = synchronized(accumulated) {
+                        accumulated.addAll(results)
+                        accumulated.toList()
+                    }
+                    send(SearchUpdate(mergeAndIndex(query, snapshot), loading = true))
+                }
             }
+        }
+        if (providers.isNotEmpty()) {
+            val snapshot = synchronized(accumulated) { accumulated.toList() }
+            send(SearchUpdate(mergeAndIndex(query, snapshot), loading = false))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -138,7 +146,10 @@ class SearchInteractor(
 
     private suspend fun runProviderSearch(provider: StreamingProvider, query: String): List<UnifiedSearchResult> =
         withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
-            runCatching {
+            // runCatchingExceptCancellation lets a real cancellation (a superseded search) through
+            // while still degrading a slow/failed provider to no results; the timeout cancellation is
+            // caught by withTimeoutOrNull.
+            runCatchingExceptCancellation {
                 val region = settings.region(provider.id)
                     ?: provider.supportedRegions().firstOrNull()
                     ?: Region("US")
