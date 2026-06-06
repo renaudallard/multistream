@@ -65,8 +65,9 @@ shell for phone and Android TV.
 | **RTL Play** | ✅ | title page | cast, summary | — | catalog search and details via DPG Media's lfvp API (anonymous, but Belgium-only); needs a Belgian connection |
 | **Play RTS** | ✅ | video page | — | optional | free SRG SSR Integration Layer; video results only |
 
-`✅ Search` = a real catalog query from this app. `\*` = login is required for that provider's
-search. Everything else searches without a login. `Details` = what the title screen adds when you
+`✅ Search` = a real catalog query from this app. `\*` marks a one-time WebView login. Search requires
+that login for Netflix and Prime Video, and the email/password login for Disney+, Molotov and Zattoo;
+Arte, Plex, RTBF Auvio, RTL Play and Play RTS search without a login. `Details` = what the title screen adds when you
 open a result: a plot summary, and the billed cast where the service exposes it (a release year
 shows wherever search returns one); `—` providers show the poster, title and year only.
 
@@ -102,10 +103,10 @@ the **title page** and the user presses play inside the official app.
 
 - **Netflix** `https://www.netflix.com/title/<id>` (plus the `nflx://` scheme) and an in-app search
   deep link.
-- **Disney+** `https://www.disneyplus.com/...` auto-verified app links.
+- **Disney+** `https://www.disneyplus.com/browse/entity-<id>`, with `disneyplus://<id>` as a fallback.
 - **Prime Video** `https://app.primevideo.com/detail?gti=<ASIN>`. The bundled APK is the TV
   ("living-room") build; on phones the mobile package `com.amazon.avod.thirdpartyclient` is tried.
-- **Molotov** `molotov://` and `app.molotov.tv` app links, carried as a deep-link hint.
+- **Molotov** `https://www.molotov.tv/<slug>` web links, carried as a deep-link hint.
 - **Zattoo** `https://zattoo.com/live/<cid>` opens the program's live channel (the app catches every
   `zattoo.com` URL; the `/live` route comes from its bundle).
 - **Arte** `https://www.arte.tv/<lang>/videos/<id>/`, with `arte://collection/<id>` as a fallback.
@@ -181,7 +182,7 @@ JVM unit tests (run anywhere):
   and the next-episode computation.
 - `provider/api` covers the deep-link URL formats (`DeepLinks`).
 - Each searchable provider (`netflix`, `disney`, `prime`, `molotov`, `zattoo`, `arte`, `plex`,
-  `rtbf`, `rts`) replays its API client against OkHttp `MockWebServer` (plain HTTP, no Android runtime).
+  `rtbf`, `rts`, `rtl`) replays its API client against OkHttp `MockWebServer` (plain HTTP, no Android runtime).
 
 Room DAO SQL is validated at compile time by the Room KSP processor.
 
