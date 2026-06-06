@@ -68,7 +68,7 @@ class DetailViewModel(
         viewModelScope.launch { watchRepository.setEpisodeWatched(title, coord, watched) }
     }
 
-    /** Import the episodes already watched on the provider (Netflix) into local tracking. */
+    /** Import the episodes already watched on the provider's service into local tracking. */
     fun importWatched() {
         val title = _state.value.title ?: return
         viewModelScope.launch {

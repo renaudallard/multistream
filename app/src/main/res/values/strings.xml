@@ -34,9 +34,9 @@
     <string name="detail_play_on">Play on %1$s</string>
     <string name="detail_resume_episode">Resume S%1$dE%2$d</string>
     <string name="detail_season_number">Season %1$d</string>
-    <string name="detail_sync_watched">Sync watched from Netflix</string>
-    <string name="detail_import_done">Imported %1$d watched episodes from Netflix</string>
-    <string name="detail_import_none">No watched episodes found on Netflix</string>
+    <string name="detail_sync_watched">Sync watched from %1$s</string>
+    <string name="detail_import_done">Imported %1$d watched episodes</string>
+    <string name="detail_import_none">No watched episodes found</string>
 
     <!-- Settings: login -->
     <string name="settings_logged_in">Logged in ✓</string>

@@ -124,12 +124,12 @@ fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
                             Text(stringResource(R.string.detail_resume_episode, next.season, next.episode))
                         }
                     }
-                    val canImportWatched = title.availabilities.any {
-                        graph.registry.get(it.provider)?.capabilities?.canFetchWatchState == true
+                    val watchStateProvider = title.availabilities.firstNotNullOfOrNull {
+                        graph.registry.get(it.provider)?.takeIf { p -> p.capabilities.canFetchWatchState }
                     }
-                    if (canImportWatched) {
+                    if (watchStateProvider != null) {
                         FilledTonalButton(onClick = viewModel::importWatched, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.detail_sync_watched))
+                            Text(stringResource(R.string.detail_sync_watched, watchStateProvider.displayName))
                         }
                     }
                     Spacer(Modifier.height(8.dp))
