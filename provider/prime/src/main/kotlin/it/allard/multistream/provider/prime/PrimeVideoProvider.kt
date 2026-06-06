@@ -30,6 +30,7 @@ class PrimeVideoProvider(
     override val launchPackages = listOf(MOBILE_PACKAGE, packageName)
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canFetchWatchState = true,
         canDeepLinkToTitle = true,
         requiresAuth = true,
     )
@@ -60,6 +61,17 @@ class PrimeVideoProvider(
         val cookie = cookies ?: return emptyList()
         return try {
             api.search(query, cookie, region)
+        } catch (e: PrimeApiException) {
+            if (e.authError) cookies = null
+            emptyList()
+        }
+    }
+
+    override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> {
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        val cookie = cookies ?: return emptyList()
+        return try {
+            api.fetchWatchedEpisodes(ref.providerTitleId, cookie)
         } catch (e: PrimeApiException) {
             if (e.authError) cookies = null
             emptyList()
