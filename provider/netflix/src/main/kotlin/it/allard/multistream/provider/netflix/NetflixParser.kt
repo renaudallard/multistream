@@ -2,6 +2,7 @@ package it.allard.multistream.provider.netflix
 
 import it.allard.multistream.core.model.AvailabilityType
 import it.allard.multistream.core.model.Episode
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
@@ -124,6 +125,28 @@ object NetflixParser {
             } ?: emptyList()
             Season(seasonSeq, seasonObj["longName"].string() ?: seasonObj["shortName"].string(), episodes)
         }
+    }
+
+    /**
+     * Episodes the member has watched, from the same /metadata response. Each episode carries a resume
+     * `bookmark` (seconds) for the logged-in member; an episode is treated as watched once the bookmark
+     * has reached at least 90% of its runtime.
+     */
+    fun parseWatchedEpisodes(root: JsonObject): List<EpisodeCoord> {
+        val video = root["video"].obj() ?: root
+        val out = mutableListOf<EpisodeCoord>()
+        video["seasons"].array()?.forEach { season ->
+            val seasonObj = season.obj() ?: return@forEach
+            val seasonSeq = seasonObj["seq"].int() ?: return@forEach
+            seasonObj["episodes"].array()?.forEach { episode ->
+                val episodeObj = episode.obj() ?: return@forEach
+                val episodeSeq = episodeObj["seq"].int() ?: return@forEach
+                val bookmark = episodeObj["bookmark"].int() ?: 0
+                val runtime = episodeObj["runtime"].int() ?: 0
+                if (runtime > 0 && bookmark >= runtime * 9 / 10) out += EpisodeCoord(seasonSeq, episodeSeq)
+            }
+        }
+        return out
     }
 
     /** Map each requested id to its poster url from a boxarts pathEvaluator response (portrait first). */

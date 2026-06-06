@@ -32,6 +32,7 @@ class NetflixProvider(
         canSearch = true,
         canGetDetails = true,
         canListEpisodes = true,
+        canFetchWatchState = true,
         canDeepLinkToTitle = true,
         canInAppSearchDeepLink = true,
         requiresAuth = true,
@@ -56,6 +57,19 @@ class NetflixProvider(
         } catch (e: NetflixApiException) {
             if (e.authError) api.invalidate()
             null
+        }
+    }
+
+    override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> {
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        val cookie = cookies ?: return emptyList()
+        return try {
+            val watched = api.fetchWatchedEpisodes(ref.providerTitleId, cookie)
+            persistRotated(cookie, config)
+            watched
+        } catch (e: NetflixApiException) {
+            if (e.authError) api.invalidate()
+            emptyList()
         }
     }
 

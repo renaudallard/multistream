@@ -63,6 +63,12 @@ interface StreamingProvider {
     suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> = emptyList()
 
     /**
+     * The episodes the member has already watched on the provider's own service, for importing into
+     * local tracking. Only called when [ProviderCapabilities.canFetchWatchState].
+     */
+    suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> = emptyList()
+
+    /**
      * Build an Intent that opens [ref] (optionally a specific [episode]) in the provider's app,
      * or null if no title-level deep link can be built. Providers downgrade to the title page when
      * episode deep-linking is unsupported.

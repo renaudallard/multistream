@@ -42,8 +42,9 @@ import it.allard.multistream.ui.components.ProviderBadge
 @Composable
 fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
     val graph = LocalAppGraph.current
+    val appContext = LocalContext.current.applicationContext
     val viewModel = appViewModel {
-        DetailViewModel(titleKey, graph.searchInteractor, graph.watchRepository, graph.registry, graph.launchController)
+        DetailViewModel(titleKey, graph.searchInteractor, graph.watchRepository, graph.registry, graph.launchController, appContext)
     }
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
@@ -121,6 +122,14 @@ fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
                     state.nextEpisode?.let { next ->
                         FilledTonalButton(onClick = viewModel::resume, modifier = Modifier.fillMaxWidth()) {
                             Text(stringResource(R.string.detail_resume_episode, next.season, next.episode))
+                        }
+                    }
+                    val canImportWatched = title.availabilities.any {
+                        graph.registry.get(it.provider)?.capabilities?.canFetchWatchState == true
+                    }
+                    if (canImportWatched) {
+                        FilledTonalButton(onClick = viewModel::importWatched, modifier = Modifier.fillMaxWidth()) {
+                            Text(stringResource(R.string.detail_sync_watched))
                         }
                     }
                     Spacer(Modifier.height(8.dp))

@@ -12,6 +12,9 @@ data class ProviderCapabilities(
     val canSearch: Boolean = false,
     val canGetDetails: Boolean = false,
     val canListEpisodes: Boolean = false,
+    // The provider can report which episodes the member has already watched on its own service, for
+    // importing into local tracking (Netflix, via the member /metadata bookmarks).
+    val canFetchWatchState: Boolean = false,
     val canDeepLinkToTitle: Boolean = false,
     val canDeepLinkToEpisode: Boolean = false,
     val canDeepLinkToPlay: Boolean = false,

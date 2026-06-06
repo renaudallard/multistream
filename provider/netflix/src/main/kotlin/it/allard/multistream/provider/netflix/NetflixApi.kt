@@ -1,5 +1,7 @@
 package it.allard.multistream.provider.netflix
 
+import android.util.Log
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
@@ -68,6 +70,23 @@ class NetflixApi(
     suspend fun getDetails(videoId: String, cookies: String, ref: ProviderRef): ProviderTitleDetails? {
         seed(cookies)
         return withRefresh { doGetDetails(videoId, ref) }
+    }
+
+    /** Episodes the member has watched: the /metadata response carries a per-episode resume bookmark. */
+    suspend fun fetchWatchedEpisodes(videoId: String, cookies: String): List<EpisodeCoord> {
+        seed(cookies)
+        return withRefresh { doFetchWatched(videoId) }
+    }
+
+    private suspend fun doFetchWatched(videoId: String): List<EpisodeCoord> {
+        val current = session ?: prepareSession().also { session = it }
+        val metadata = exec(metadataRequest(current, videoId))
+        // Log the raw payload once so the on-device run reveals the exact watch fields (bookmark/runtime)
+        // and lets the watched threshold be tuned; truncated to keep the log line readable.
+        Log.i(WATCH_TAG, "metadata $videoId: ${metadata.toString().take(4000)}")
+        val watched = NetflixParser.parseWatchedEpisodes(metadata)
+        Log.i(WATCH_TAG, "parsed ${watched.size} watched episodes for $videoId: $watched")
+        return watched
     }
 
     /** Seed the jar from the stored cookie the first time; later rotations stay in the jar. */
@@ -230,6 +249,7 @@ class NetflixApi(
     }
 
     private companion object {
+        const val WATCH_TAG = "NetflixWatch"
         const val PAGE_SIZE = 47
         val FORM_MEDIA = "application/x-www-form-urlencoded".toMediaType()
         val COOKIE_URL = "https://www.netflix.com".toHttpUrl()

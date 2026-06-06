@@ -2,6 +2,7 @@ package it.allard.multistream.domain
 
 import it.allard.multistream.core.data.SecretStore
 import it.allard.multistream.core.data.SettingsRepository
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.Region
@@ -115,6 +116,17 @@ class SearchInteractor(
     private fun Title.episodeProvider(): Pair<StreamingProvider, ProviderRef>? =
         availabilities.firstOrNull { registry.get(it.provider)?.capabilities?.canListEpisodes == true }
             ?.let { a -> registry.get(a.provider)?.let { it to a.ref } }
+
+    private fun Title.watchStateProvider(): Pair<StreamingProvider, ProviderRef>? =
+        availabilities.firstOrNull { registry.get(it.provider)?.capabilities?.canFetchWatchState == true }
+            ?.let { a -> registry.get(a.provider)?.let { it to a.ref } }
+
+    /** The episodes the user has already watched on a capable provider (Netflix), for importing. */
+    suspend fun fetchWatched(key: TitleKey): List<EpisodeCoord> = withContext(Dispatchers.IO) {
+        val (provider, ref) = (getTitle(key) ?: return@withContext emptyList()).watchStateProvider()
+            ?: return@withContext emptyList()
+        orDefault(emptyList()) { provider.fetchWatchedEpisodes(ref, configFor(provider, ref)) }
+    }
 
     private suspend fun configFor(provider: StreamingProvider, ref: ProviderRef): ProviderConfig {
         val region = ref.region ?: settings.region(provider.id) ?: provider.supportedRegions().firstOrNull() ?: Region("US")

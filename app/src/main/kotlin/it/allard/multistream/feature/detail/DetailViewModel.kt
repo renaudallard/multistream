@@ -1,7 +1,9 @@
 package it.allard.multistream.feature.detail
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import it.allard.multistream.R
 import it.allard.multistream.core.data.WatchRepository
 import it.allard.multistream.core.data.db.WatchStatus
 import it.allard.multistream.core.model.Availability
@@ -24,6 +26,7 @@ class DetailViewModel(
     private val watchRepository: WatchRepository,
     private val registry: ProviderRegistry,
     private val launchController: LaunchController,
+    private val appContext: Context,
 ) : ViewModel() {
 
     data class UiState(
@@ -63,6 +66,21 @@ class DetailViewModel(
         val title = _state.value.title ?: return
         val watched = coord !in _state.value.watched
         viewModelScope.launch { watchRepository.setEpisodeWatched(title, coord, watched) }
+    }
+
+    /** Import the episodes already watched on the provider (Netflix) into local tracking. */
+    fun importWatched() {
+        val title = _state.value.title ?: return
+        viewModelScope.launch {
+            val coords = interactor.fetchWatched(key)
+            coords.forEach { watchRepository.setEpisodeWatched(title, it, true) }
+            val message = if (coords.isEmpty()) {
+                appContext.getString(R.string.detail_import_none)
+            } else {
+                appContext.getString(R.string.detail_import_done, coords.size)
+            }
+            _state.update { it.copy(message = message) }
+        }
     }
 
     fun toggleWatchlist() {
