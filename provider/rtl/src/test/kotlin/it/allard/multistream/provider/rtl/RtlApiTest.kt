@@ -59,7 +59,20 @@ class RtlApiTest {
         assertEquals("A copycat killer strikes.", d?.synopsis)
         assertEquals(2026, d?.year)
         assertEquals(listOf("Francis Huster", "Erika Sainte"), d?.cast)
+        assertEquals(MediaType.SERIES, d?.type) // has a seasonPicker
         assertTrue(server.takeRequest().path!!.contains("/RTL_PLAY/detail3/75cbca3b"))
+    }
+
+    @Test fun getDetails_typesAProgramWithoutSeasonsAsMovie() = runBlocking {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"title":{"label":"Taken 2"},"description":"A father is hunted.",
+                "headerLabels":[{"label":"2012","accessibilityLabel":"Année de production"}],
+                "moreInfo":{"meta":[]}}""",
+            ),
+        )
+        val d = api.getDetails("film1", ProviderRef(ProviderId.RTL, "film1", null))
+        assertEquals(MediaType.MOVIE, d?.type) // no seasonPicker -> film
     }
 
     @Test fun getSeasons_parsesEpisodesAndStripsNumberPrefix() = runBlocking {

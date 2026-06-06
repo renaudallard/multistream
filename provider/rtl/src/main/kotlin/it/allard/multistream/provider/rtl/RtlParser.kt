@@ -59,10 +59,13 @@ object RtlParser {
         val cast = root["moreInfo"].obj()?.get("meta").array()
             ?.firstOrNull { it.obj()?.get("label").string() == "Rôles" }
             ?.obj()?.get("items").array()?.mapNotNull { it.obj()?.get("label").string() }.orEmpty()
+        // A film has no seasonPicker indices; a series lists one or more seasons. The search teaser
+        // carries no type, so this detail-time check is where a film is finally labeled correctly.
+        val type = if (seasonIndices(root).isNotEmpty()) MediaType.SERIES else MediaType.MOVIE
         return ProviderTitleDetails(
             ref = ref,
             title = root["title"].obj()?.get("label").string() ?: "",
-            type = MediaType.SERIES,
+            type = type,
             year = year,
             synopsis = root["description"].string()?.takeIf { it.isNotBlank() },
             cast = cast,
