@@ -37,7 +37,9 @@ data class SearchUpdate(val results: List<Title>, val loading: Boolean)
 class SearchInteractor(
     private val registry: ProviderRegistry,
     private val settings: SettingsRepository,
-    private val secrets: SecretStore,
+    // A lazy accessor: resolving it builds the Keystore-backed store, which must not run on the main
+    // thread, so the first touch happens inside the IO-dispatched search/detail work below.
+    private val secrets: () -> SecretStore,
 ) {
     // Bounded LRU: the resolve-by-key cache for clicked results must not grow for the whole process.
     private val index: MutableMap<String, Title> = Collections.synchronizedMap(
@@ -119,8 +121,8 @@ class SearchInteractor(
         return ProviderConfig(
             region,
             enabled = true,
-            secrets = secrets.read(provider.id),
-            persistSecrets = { secrets.write(provider.id, it) },
+            secrets = secrets().read(provider.id),
+            persistSecrets = { secrets().write(provider.id, it) },
         )
     }
 
@@ -159,8 +161,8 @@ class SearchInteractor(
                     ProviderConfig(
                         region,
                         enabled = true,
-                        secrets = secrets.read(provider.id),
-                        persistSecrets = { secrets.write(provider.id, it) },
+                        secrets = secrets().read(provider.id),
+                        persistSecrets = { secrets().write(provider.id, it) },
                     ),
                 )
             }.getOrNull()

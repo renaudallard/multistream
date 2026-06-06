@@ -50,7 +50,7 @@ class AppGraph(context: Context) {
     }
 
     val registry: ProviderRegistry by lazy { ProviderRegistry(providers, settings) }
-    val searchInteractor: SearchInteractor by lazy { SearchInteractor(registry, settings, secrets) }
+    val searchInteractor: SearchInteractor by lazy { SearchInteractor(registry, settings) { secrets } }
     val launchController: LaunchController by lazy { LaunchController(appContext) }
 }
 
