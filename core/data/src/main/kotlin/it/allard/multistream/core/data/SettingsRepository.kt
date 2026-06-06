@@ -37,12 +37,20 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun region(provider: ProviderId): Region? = regionFlow(provider).first()
 
+    // A failed settings write (corrupt or full storage raises IOException) must not crash the caller;
+    // the preference simply isn't saved.
     suspend fun setEnabled(provider: ProviderId, enabled: Boolean) {
-        context.settingsDataStore.edit { it[enabledKey(provider)] = enabled }
+        try {
+            context.settingsDataStore.edit { it[enabledKey(provider)] = enabled }
+        } catch (e: IOException) {
+        }
     }
 
     suspend fun setRegion(provider: ProviderId, region: Region) {
-        context.settingsDataStore.edit { it[regionKey(provider)] = region.code }
+        try {
+            context.settingsDataStore.edit { it[regionKey(provider)] = region.code }
+        } catch (e: IOException) {
+        }
     }
 
     private fun enabledKey(provider: ProviderId) = booleanPreferencesKey("enabled_${provider.name}")
