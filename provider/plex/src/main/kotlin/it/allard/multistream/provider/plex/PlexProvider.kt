@@ -34,6 +34,7 @@ class PlexProvider(
     override val capabilities = ProviderCapabilities(
         canSearch = true,
         canGetDetails = true,
+        canFetchWatchState = true,
         canDeepLinkToTitle = true,
         requiresAuth = false,
         optionalLogin = true,
@@ -113,6 +114,17 @@ class PlexProvider(
         val serverUrl = server ?: return null
         val serverToken = token ?: return null
         return runCatchingExceptCancellation { api.getDetails(serverUrl, serverToken, ref.providerTitleId, ref) }.getOrNull()
+    }
+
+    override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> {
+        ensureSession(config)
+        // Only the user's own server tracks watch state; ref.providerTitleId is the show's ratingKey.
+        // Discover-only results have no server item, so without a server/token there is nothing to read.
+        val serverUrl = server ?: return emptyList()
+        val serverToken = token ?: return emptyList()
+        return runCatchingExceptCancellation {
+            api.fetchWatchedEpisodes(serverUrl, serverToken, ref.providerTitleId)
+        }.getOrDefault(emptyList())
     }
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {

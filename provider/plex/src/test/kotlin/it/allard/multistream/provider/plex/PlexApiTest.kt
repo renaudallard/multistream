@@ -1,5 +1,6 @@
 package it.allard.multistream.provider.plex
 
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
@@ -115,6 +116,29 @@ class PlexApiTest {
         assertEquals(2022, details?.year)
         assertEquals(listOf("Robert Pattinson", "Zoe Kravitz"), details?.cast)
         assertTrue(server.takeRequest().path!!.contains("/library/metadata/42"))
+    }
+
+    @Test fun fetchWatchedEpisodes_returnsOnlyViewedEpisodes() = runBlocking {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"MediaContainer":{"Metadata":[
+                  {"type":"episode","parentIndex":1,"index":1,"viewCount":1,"viewOffset":null},
+                  {"type":"episode","parentIndex":1,"index":2,"viewCount":2},
+                  {"type":"episode","parentIndex":1,"index":3,"viewOffset":500},
+                  {"type":"episode","parentIndex":2,"index":1,"viewCount":0}
+                ]}}
+                """.trimIndent(),
+            ),
+        )
+        val base = server.url("/").toString().removeSuffix("/")
+        val watched = api.fetchWatchedEpisodes(base, "TKN", "99")
+        assertEquals(2, watched.size)
+        assertEquals(EpisodeCoord(1, 1), watched[0])
+        assertEquals(EpisodeCoord(1, 2), watched[1])
+        val request = server.takeRequest()
+        assertTrue(request.path!!.contains("/library/metadata/99/allLeaves"))
+        assertEquals("TKN", request.getHeader("X-Plex-Token"))
     }
 
     @Test fun verifyServer_failsOnUnauthorizedToken() = runBlocking {

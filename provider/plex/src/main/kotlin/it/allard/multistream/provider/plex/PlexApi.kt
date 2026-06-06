@@ -1,5 +1,7 @@
 package it.allard.multistream.provider.plex
 
+import android.util.Log
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderTitleDetails
@@ -159,6 +161,31 @@ class PlexApi(
         }
     }
 
+    /**
+     * Episodes the member has watched for a show on their own Plex Media Server. `allLeaves` lists
+     * every episode of the show (ratingKey) flattened, each carrying its season (`parentIndex`),
+     * number (`index`) and `viewCount` (>0 = watched). Server-only: Discover results have no ratingKey
+     * on the user's server, so the caller returns empty when no server/token is available.
+     */
+    suspend fun fetchWatchedEpisodes(serverUrl: String, token: String, ratingKey: String): List<EpisodeCoord> {
+        val url = "${serverUrl.trimEnd('/')}/library/metadata/$ratingKey/allLeaves"
+        client.await(Request.Builder().url(url).headers(headers(token)).get().build()).use { response ->
+            if (response.code == 401) throw PlexApiException("Unauthorized", authError = true)
+            if (!response.isSuccessful) throw PlexApiException("HTTP ${response.code}")
+            val body = response.body?.string().orEmpty()
+            val root = NetJson.parseToJsonElement(body).obj() ?: return emptyList()
+            val watched = PlexParser.parseWatchedEpisodes(root)
+            // Log the parsed coords plus a compact per-episode (S<parentIndex>E<index>:viewCount) view of
+            // the raw response so an on-device run confirms the exact watched field; truncate the blob.
+            Log.i(
+                WATCH_TAG,
+                "show $ratingKey watched=${watched.size}: $watched | ${PlexParser.watchDebug(root)} " +
+                    "| raw=${body.take(MAX_RAW_LOG)}",
+            )
+            return watched
+        }
+    }
+
     /** Public Discover search; the optional token adds the member's personalized watch options. */
     suspend fun search(query: String, token: String?): List<UnifiedSearchResult> {
         val url = "$discoverUrl?query=${URLEncoder.encode(query, "UTF-8")}" +
@@ -185,5 +212,7 @@ class PlexApi(
         const val CLIENT_ID = "it.allard.multistream"
         const val MAX_POLLS = 360
         const val POLL_INTERVAL_MS = 2_000L
+        const val WATCH_TAG = "PlexWatch"
+        const val MAX_RAW_LOG = 4_000
     }
 }

@@ -1,11 +1,14 @@
 package it.allard.multistream.provider.plex
 
 import it.allard.multistream.core.model.AvailabilityType
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.UnifiedSearchResult
+import it.allard.multistream.core.net.array
 import it.allard.multistream.core.net.int
+import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -67,4 +70,33 @@ object PlexParser {
         imageBase != null -> "${imageBase.trimEnd('/')}$thumb"
         else -> null
     }
+
+    /**
+     * Watched episodes from a Plex Media Server's `/library/metadata/<ratingKey>/allLeaves` response
+     * (`MediaContainer.Metadata[]`, one entry per episode). Each episode carries `parentIndex` (season
+     * number), `index` (episode number) and `viewCount`; a Plex server counts an item as watched once
+     * `viewCount > 0` (a partial resume sets only `viewOffset` and leaves `viewCount` at 0).
+     */
+    fun parseWatchedEpisodes(root: JsonObject): List<EpisodeCoord> =
+        episodes(root).mapNotNull { episode ->
+            val season = episode["parentIndex"].int() ?: return@mapNotNull null
+            val number = episode["index"].int() ?: return@mapNotNull null
+            if ((episode["viewCount"].int() ?: 0) > 0) EpisodeCoord(season, number) else null
+        }
+
+    /**
+     * Compact per-episode summary (`S<parentIndex>E<index>:viewCount`, with the resume offset appended
+     * when present) for on-device diagnosis, so the watched field can be confirmed from a real server.
+     */
+    fun watchDebug(root: JsonObject): String =
+        episodes(root).joinToString(" ") { episode ->
+            val season = episode["parentIndex"].int()
+            val number = episode["index"].int()
+            val views = episode["viewCount"].int() ?: 0
+            val offset = episode["viewOffset"].int()
+            "S${season ?: "-"}E${number ?: "-"}:$views" + if (offset != null) "@$offset" else ""
+        }
+
+    private fun episodes(root: JsonObject): List<JsonObject> =
+        root["MediaContainer"].obj()?.get("Metadata").array()?.mapNotNull { it.obj() }.orEmpty()
 }
