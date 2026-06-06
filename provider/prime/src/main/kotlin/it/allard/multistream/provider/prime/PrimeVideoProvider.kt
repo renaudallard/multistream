@@ -7,6 +7,7 @@ import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.DeepLinks
 import it.allard.multistream.provider.api.Launcher
@@ -30,6 +31,7 @@ class PrimeVideoProvider(
     override val launchPackages = listOf(MOBILE_PACKAGE, packageName)
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canListEpisodes = true,
         canFetchWatchState = true,
         canDeepLinkToTitle = true,
         requiresAuth = true,
@@ -61,6 +63,17 @@ class PrimeVideoProvider(
         val cookie = cookies ?: return emptyList()
         return try {
             api.search(query, cookie, region)
+        } catch (e: PrimeApiException) {
+            if (e.authError) cookies = null
+            emptyList()
+        }
+    }
+
+    override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> {
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        val cookie = cookies ?: return emptyList()
+        return try {
+            api.getSeasons(ref.providerTitleId, cookie)
         } catch (e: PrimeApiException) {
             if (e.authError) cookies = null
             emptyList()

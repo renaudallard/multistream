@@ -3,10 +3,14 @@ package it.allard.multistream.provider.prime
 import android.util.Log
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.model.normalizeTitle
 import it.allard.multistream.core.net.await
 import it.allard.multistream.core.net.buildClient
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
@@ -45,30 +49,60 @@ class PrimeApi(
     }
 
     /**
-     * Best-effort watch state for a signed-in member. Prime's web search HTML has no watch fields, so
-     * we GET the logged-in title detail page with the stored cookies (the public detail path first,
-     * then the gp/video variant as a fallback) and scan its embedded `text/template` JSON.
-     *
-     * The raw, per-episode watch fields are logged under [WATCH_TAG] so an on-device run reveals
-     * whether Prime exposes any resume/progress/watched field at all without full ATV device auth.
-     * Without that evidence the parse is a reasonable guess and may legitimately return nothing.
+     * Watch state for a signed-in member, across every season. The logged-in detail page reports each
+     * episode's playback progress (1.0 once fully watched) for the selected season only, so the
+     * selected season is read from the title page and every other season's page is fetched in parallel
+     * via its selector link and unioned, mirroring [getSeasons].
      */
     suspend fun fetchWatchedEpisodes(gti: String, cookies: String): List<EpisodeCoord> {
         val html = fetchDetailHtml("$baseUrl/detail/$gti", cookies)
-            ?.takeIf { it.contains("text/template", ignoreCase = true) || it.trimStart().startsWith("{") }
+            ?.takeIf { it.contains("text/template", ignoreCase = true) || it.contains(PrimeParser.HYDRATION_ID) || it.trimStart().startsWith("{") }
             ?: fetchDetailHtml("$baseUrl/gp/video/detail/$gti", cookies)
             ?: run {
                 Log.i(WATCH_TAG, "gti=$gti: detail page fetch failed (no body)")
                 return emptyList()
             }
-        val watched = PrimeParser.parseWatchedEpisodes(html)
-        // Compact, truncated per-episode field summary so the real watch field can be identified on
-        // device. The bodyLen tells us whether we got a real logged-in page or a login/redirect stub.
-        Log.i(
-            WATCH_TAG,
-            "gti=$gti watched=${watched.size}: $watched | bodyLen=${html.length} | ${PrimeParser.watchDebug(html)}",
-        )
+        val selected = PrimeParser.parseWatchedEpisodes(html)
+        val others = PrimeParser.seasonLinks(html).filter { !it.isSelected }
+        val rest = coroutineScope {
+            others.map { link ->
+                async { fetchDetailHtml("$baseUrl${link.link}", cookies)?.let { PrimeParser.parseWatchedEpisodes(it) }.orEmpty() }
+            }.awaitAll()
+        }.flatten()
+        val watched = (selected + rest).distinct()
+        Log.i(WATCH_TAG, "gti=$gti watched=${watched.size}: $watched | fetched=${1 + others.size} | bodyLen=${html.length}")
         return watched
+    }
+
+    /**
+     * Season/episode enumeration for a series from the logged-in detail page. A modern
+     * primevideo.com detail page embeds only the selected season's episodes (public detail path
+     * first, then the gp/video fallback); its season selector lists every other season's detail link,
+     * so the full run is assembled by fetching each of those pages in parallel and merging the result.
+     */
+    suspend fun getSeasons(gti: String, cookies: String): List<Season> {
+        val html = fetchDetailHtml("$baseUrl/detail/$gti", cookies)
+            ?.takeIf { it.contains("text/template", ignoreCase = true) || it.contains(PrimeParser.HYDRATION_ID) || it.trimStart().startsWith("{") }
+            ?: fetchDetailHtml("$baseUrl/gp/video/detail/$gti", cookies)
+            ?: run {
+                Log.i(EPISODES_TAG, "gti=$gti: detail page fetch failed (no body)")
+                return emptyList()
+            }
+        val selected = PrimeParser.parseSeasons(html)
+        val have = selected.map { it.seasonNumber }.toSet()
+        // The detail page embeds only the selected season; fetch each other season's link in parallel.
+        val others = PrimeParser.seasonLinks(html).filter { it.sequenceNumber !in have }
+        val rest = coroutineScope {
+            others.map { link ->
+                async { fetchDetailHtml("$baseUrl${link.link}", cookies)?.let { PrimeParser.parseSeasons(it) }.orEmpty() }
+            }.awaitAll()
+        }.flatten()
+        val seasons = (selected + rest).sortedBy { it.seasonNumber }
+        Log.i(
+            EPISODES_TAG,
+            "gti=$gti seasons=${seasons.size} episodes=${seasons.sumOf { it.episodes.size }} | fetched=${1 + others.size} | bodyLen=${html.length}",
+        )
+        return seasons
     }
 
     /** GET a detail URL with the member cookies; null on a non-2xx or transport error. */
@@ -90,6 +124,7 @@ class PrimeApi(
 
     private companion object {
         const val WATCH_TAG = "PrimeWatch"
+        const val EPISODES_TAG = "PrimeEpisodes"
         const val USER_AGENT =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
     }
