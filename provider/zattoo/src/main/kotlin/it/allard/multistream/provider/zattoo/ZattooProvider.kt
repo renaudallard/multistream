@@ -13,6 +13,9 @@ import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.SessionState
 import it.allard.multistream.provider.api.StreamingProvider
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Zattoo (DACH live TV + replay). Search runs over the zapi program guide. Launch deep-links to the
@@ -34,6 +37,8 @@ class ZattooProvider(
 
     override fun supportedRegions(): Set<Region> = setOf(Region.CH, Region.DE)
 
+    private val sessionMutex = Mutex()
+
     override suspend fun login(username: String, password: String): ProviderSecrets {
         api.login(username, password)
         return ProviderSecrets(extra = mapOf("email" to username, "password" to password))
@@ -41,13 +46,18 @@ class ZattooProvider(
 
     override suspend fun ensureSession(config: ProviderConfig): SessionState {
         if (api.isLoggedIn()) return SessionState.Ready
-        val email = config.secrets.extra["email"]
-        val password = config.secrets.extra["password"]
-        if (email != null && password != null) {
-            return runCatching { api.login(email, password) }
-                .fold({ SessionState.Ready }, { SessionState.NeedsLogin(it.message ?: "Login failed") })
+        return sessionMutex.withLock {
+            // Re-check inside the lock so concurrent callers don't each start a fresh login.
+            if (api.isLoggedIn()) return@withLock SessionState.Ready
+            val email = config.secrets.extra["email"]
+            val password = config.secrets.extra["password"]
+            if (email != null && password != null) {
+                runCatchingExceptCancellation { api.login(email, password) }
+                    .fold({ SessionState.Ready }, { SessionState.NeedsLogin(it.message ?: "Login failed") })
+            } else {
+                SessionState.NeedsLogin("Zattoo login required")
+            }
         }
-        return SessionState.NeedsLogin("Zattoo login required")
     }
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
@@ -63,7 +73,7 @@ class ZattooProvider(
     private suspend fun retryAfterAuth(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         api.invalidateSession()
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
-        return runCatching { api.search(query, region) }.getOrDefault(emptyList())
+        return runCatchingExceptCancellation { api.search(query, region) }.getOrDefault(emptyList())
     }
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? =
