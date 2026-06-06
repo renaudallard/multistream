@@ -10,6 +10,7 @@ import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody
 import okhttp3.ResponseBody.Companion.toResponseBody
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -87,7 +88,7 @@ suspend fun OkHttpClient.await(request: Request): Response {
                 val buffered = try {
                     response.use {
                         val type = it.body?.contentType()
-                        val bytes = it.body?.bytes() ?: ByteArray(0)
+                        val bytes = it.body?.readCapped() ?: ByteArray(0)
                         it.newBuilder().body(bytes.toResponseBody(type)).build()
                     }
                 } catch (e: Throwable) {
@@ -98,4 +99,18 @@ suspend fun OkHttpClient.await(request: Request): Response {
             }
         })
     }
+}
+
+private const val MAX_BODY_BYTES = 32L * 1024 * 1024
+
+/**
+ * Read a response body fully into memory, but fail once it exceeds [MAX_BODY_BYTES] so a hostile or
+ * malformed provider can't OOM the process. request() buffers at most the cap plus one byte, so an
+ * oversized body is rejected without ever being fully allocated.
+ */
+private fun ResponseBody.readCapped(): ByteArray {
+    val source = source()
+    source.request(MAX_BODY_BYTES + 1)
+    if (source.buffer.size > MAX_BODY_BYTES) throw IOException("Response body exceeds $MAX_BODY_BYTES bytes")
+    return source.readByteArray()
 }
