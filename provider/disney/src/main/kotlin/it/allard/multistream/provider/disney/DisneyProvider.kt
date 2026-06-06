@@ -34,6 +34,7 @@ class DisneyProvider(
         canSearch = true,
         canGetDetails = true,
         canListEpisodes = true,
+        canFetchWatchState = true,
         canDeepLinkToTitle = true,
         requiresAuth = true,
     )
@@ -47,6 +48,9 @@ class DisneyProvider(
 
     override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? =
         authedCall(config, null) { token -> api.getDetails(ref.providerTitleId, token, ref) }
+
+    override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> =
+        authedCall(config, emptyList()) { token -> api.fetchWatchedEpisodes(ref.providerTitleId, token) }
 
     override suspend fun login(username: String, password: String): ProviderSecrets {
         val tokens = api.login(username, password)

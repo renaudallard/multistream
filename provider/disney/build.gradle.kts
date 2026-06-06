@@ -13,6 +13,8 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    // The watch-state fetch logs a diagnostic via android.util.Log; let it no-op under JVM unit tests.
+    testOptions { unitTests.isReturnDefaultValues = true }
 }
 
 dependencies {

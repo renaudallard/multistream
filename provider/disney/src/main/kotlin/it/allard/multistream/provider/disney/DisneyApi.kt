@@ -1,5 +1,7 @@
 package it.allard.multistream.provider.disney
 
+import android.util.Log
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
@@ -81,6 +83,30 @@ class DisneyApi(
     suspend fun getDetails(entityId: String, accessToken: String, ref: ProviderRef): ProviderTitleDetails? {
         val page = execContentGet("$apiBase/explore/v1.9/page/entity-$entityId", accessToken)
         return DisneyParser.parseDetails(page, ref)
+    }
+
+    /**
+     * Episodes the logged-in member has watched. Reuses the seasons flow (entity page -> season refs ->
+     * one season page per season for its items); each season item is expected to carry a per-member
+     * progress/bookmark. The RAW season JSON is logged under [WATCH_TAG] so the real progress field can
+     * be confirmed from an on-device run, then [DisneyParser.parseWatchedEpisodes] best-effort detects
+     * watched episodes from candidate fields.
+     */
+    suspend fun fetchWatchedEpisodes(entityId: String, accessToken: String): List<EpisodeCoord> {
+        val page = execContentGet("$apiBase/explore/v1.9/page/entity-$entityId", accessToken)
+        val out = mutableListOf<EpisodeCoord>()
+        for (season in DisneyParser.parseSeasonRefs(page)) {
+            val seasonPage = runCatchingExceptCancellation {
+                execContentGet("$apiBase/explore/v1.7/season/${season.id}", accessToken)
+            }.getOrNull() ?: continue
+            // Dump the raw season payload (truncated) so the exact watch field is visible on device;
+            // the detection in parseWatchedEpisodes is a best-effort guess until confirmed from this.
+            Log.i(WATCH_TAG, "entity $entityId season ${season.number} (${season.id}) raw=${seasonPage.toString().take(RAW_LOG_LIMIT)}")
+            val watched = DisneyParser.parseWatchedEpisodes(seasonPage, season.number)
+            Log.i(WATCH_TAG, "entity $entityId season ${season.number} watched=${watched.size}: $watched | ${DisneyParser.watchDebug(seasonPage, season.number)}")
+            out += watched
+        }
+        return out
     }
 
     private suspend fun obtainClientApiKey(): String {
@@ -202,6 +228,8 @@ class DisneyApi(
     }
 
     private companion object {
+        const val WATCH_TAG = "DisneyWatch"
+        const val RAW_LOG_LIMIT = 4000
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
         const val BROWSER_UA =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"

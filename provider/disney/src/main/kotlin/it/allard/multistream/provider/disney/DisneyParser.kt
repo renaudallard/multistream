@@ -2,6 +2,7 @@ package it.allard.multistream.provider.disney
 
 import it.allard.multistream.core.model.AvailabilityType
 import it.allard.multistream.core.model.Episode
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
@@ -9,6 +10,7 @@ import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.array
+import it.allard.multistream.core.net.bool
 import it.allard.multistream.core.net.int
 import it.allard.multistream.core.net.long
 import it.allard.multistream.core.net.obj
@@ -148,6 +150,80 @@ object DisneyParser {
             )
         }
     }
+
+    // Watched-detection threshold: a progress percentage at/above this counts the episode as finished.
+    private const val WATCHED_PERCENT = 95.0
+
+    // Candidate progress percentage fields on a season item (or its visuals/progress object). The real
+    // field is unknown, so log the raw and probe each: confirm the actual one from the on-device log.
+    private val PROGRESS_FIELDS = listOf(
+        "percentage", "progress", "playhead", "bookmark", "viewedProgress",
+        "completionPercentage", "percentComplete", "percentageWatched", "playbackPercentage",
+    )
+
+    // Candidate boolean "watched/complete" flags on a season item (or nested progress object).
+    private val WATCHED_FLAGS = listOf("watched", "complete", "isWatched", "isComplete", "fullyWatched")
+
+    // Objects under which a progress/bookmark may be nested on a season item.
+    private val PROGRESS_CONTAINERS = listOf("progress", "bookmark", "watchhistory", "viewedProgress")
+
+    /**
+     * Best-effort: episodes the member has watched, from a season page (`data.season.items`). Disney
+     * syncs progress server-side, but the exact field is unconfirmed, so this probes several candidate
+     * names (a percentage >= [WATCHED_PERCENT], or a watched/complete flag) at the item level, under
+     * `visuals`, and inside a nested progress/bookmark object. The episode number is read from
+     * `visuals.episodeNumber` like [parseEpisodes]. The RAW season JSON is logged by the Api so the real
+     * field can be confirmed and this tuned afterwards.
+     */
+    fun parseWatchedEpisodes(seasonPage: JsonObject, seasonNumber: Int): List<EpisodeCoord> {
+        val items = seasonPage["data"].obj()?.get("season").obj()?.get("items").array() ?: return emptyList()
+        val out = mutableListOf<EpisodeCoord>()
+        for (item in items) {
+            val obj = item.obj() ?: continue
+            val number = obj["visuals"].obj()?.get("episodeNumber").int() ?: continue
+            if (isWatched(obj)) out += EpisodeCoord(seasonNumber, number)
+        }
+        return out
+    }
+
+    /** Probe an episode item (and its visuals + nested progress objects) for any watched signal. */
+    private fun isWatched(item: JsonObject): Boolean {
+        val scopes = listOfNotNull(item, item["visuals"].obj()) +
+            PROGRESS_CONTAINERS.flatMapNotNull { key ->
+                listOf(item[key].obj(), item["visuals"].obj()?.get(key).obj())
+            }
+        return scopes.any { scope ->
+            PROGRESS_FIELDS.any { (progressPercent(scope[it]) ?: -1.0) >= WATCHED_PERCENT } ||
+                WATCHED_FLAGS.any { scope[it].bool() == true }
+        }
+    }
+
+    /** Coerce a candidate progress value to a percentage: a 0..1 fraction is scaled to 0..100. */
+    private fun progressPercent(element: JsonElement?): Double? {
+        val value = element.string()?.toDoubleOrNull() ?: return null
+        return if (value in 0.0..1.0) value * 100.0 else value
+    }
+
+    /** Compact per-episode progress summary for on-device diagnosis (`S1E1:<field>=<val>`). */
+    fun watchDebug(seasonPage: JsonObject, seasonNumber: Int): String {
+        val items = seasonPage["data"].obj()?.get("season").obj()?.get("items").array() ?: return ""
+        val sb = StringBuilder()
+        for (item in items) {
+            val obj = item.obj() ?: continue
+            val number = obj["visuals"].obj()?.get("episodeNumber").int() ?: continue
+            val scopes = listOfNotNull(obj, obj["visuals"].obj())
+            val found = scopes.firstNotNullOfOrNull { scope ->
+                (PROGRESS_FIELDS + WATCHED_FLAGS).firstNotNullOfOrNull { field ->
+                    scope[field]?.let { "$field=${it.string() ?: it}" }
+                }
+            } ?: "-"
+            sb.append("S${seasonNumber}E$number:$found ")
+        }
+        return sb.toString().trim()
+    }
+
+    private fun <T, R> List<T>.flatMapNotNull(transform: (T) -> List<R?>): List<R> =
+        flatMap { transform(it).filterNotNull() }
 
     // Aspect-ratio tile keys, portrait (poster) shapes first.
     private val PORTRAIT_TILES = listOf("0.67", "0.71", "0.75")
