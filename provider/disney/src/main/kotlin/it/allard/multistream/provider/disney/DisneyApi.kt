@@ -16,8 +16,10 @@ import it.allard.multistream.core.net.buildClient
 import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlinx.serialization.json.putJsonObject
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -86,27 +88,47 @@ class DisneyApi(
     }
 
     /**
-     * Episodes the logged-in member has watched. Reuses the seasons flow (entity page -> season refs ->
-     * one season page per season for its items); each season item is expected to carry a per-member
-     * progress/bookmark. The RAW season JSON is logged under [WATCH_TAG] so the real progress field can
-     * be confirmed from an on-device run, then [DisneyParser.parseWatchedEpisodes] best-effort detects
-     * watched episodes from candidate fields.
+     * Episodes the logged-in member has watched. Each explore episode item carries an opaque
+     * personalization `pid` but no inline progress, so collect every episode's (pid, season, episode)
+     * from the entity page (which inlines the current season) plus one season call per remaining season,
+     * then batch-look up the pids in a single `/userState` POST and keep those whose progress crosses
+     * the watched threshold.
      */
     suspend fun fetchWatchedEpisodes(entityId: String, accessToken: String): List<EpisodeCoord> {
         val page = execContentGet("$apiBase/explore/v1.9/page/entity-$entityId", accessToken)
-        val out = mutableListOf<EpisodeCoord>()
+        val refs = LinkedHashMap<String, DisneyEpisodeRef>()
+        DisneyParser.parseEpisodeRefs(page).forEach { refs.putIfAbsent(it.pid, it) }
         for (season in DisneyParser.parseSeasonRefs(page)) {
-            val seasonPage = runCatchingExceptCancellation {
+            runCatchingExceptCancellation {
                 execContentGet("$apiBase/explore/v1.7/season/${season.id}", accessToken)
-            }.getOrNull() ?: continue
-            // Dump the raw season payload (truncated) so the exact watch field is visible on device;
-            // the detection in parseWatchedEpisodes is a best-effort guess until confirmed from this.
-            Log.i(WATCH_TAG, "entity $entityId season ${season.number} (${season.id}) raw=${seasonPage.toString().take(RAW_LOG_LIMIT)}")
-            val watched = DisneyParser.parseWatchedEpisodes(seasonPage, season.number)
-            Log.i(WATCH_TAG, "entity $entityId season ${season.number} watched=${watched.size}: $watched | ${DisneyParser.watchDebug(seasonPage, season.number)}")
-            out += watched
+            }.getOrNull()?.let { seasonPage ->
+                DisneyParser.parseEpisodeRefs(seasonPage).forEach { refs.putIfAbsent(it.pid, it) }
+            }
         }
-        return out
+        if (refs.isEmpty()) return emptyList()
+        val body = buildJsonObject { putJsonArray("pids") { refs.keys.forEach { add(it) } } }.toString()
+        val userState = runCatchingExceptCancellation {
+            execContentPost("$apiBase/explore/v1.9/userState", body, accessToken)
+        }.onFailure { Log.i(WATCH_TAG, "userState call failed: ${it.message}") }.getOrNull()
+        val watched = userState?.let { DisneyParser.watchedFromUserState(it, refs.values.toList()) }.orEmpty()
+        Log.i(WATCH_TAG, "entity $entityId episodes=${refs.size} watched=${watched.size}: $watched")
+        return watched
+    }
+
+    /** POST to an explore content endpoint with the member access token (mirrors [execContentGet]). */
+    private suspend fun execContentPost(url: String, body: String, accessToken: String): JsonObject {
+        val builder = Request.Builder().url(url)
+            .header("accept", "application/vnd.media-service+json; version=6")
+            .header("User-Agent", BROWSER_UA)
+            .header("x-bamsdk-platform", "android")
+            .header("x-bamsdk-version", "23.1")
+            .header("x-dss-edge-accept", "vnd.dss.edge+json; version=2")
+            .header("x-dss-feature-filtering", "true")
+            .header("Origin", "https://www.disneyplus.com")
+            .header("authorization", accessToken)
+            .header("Content-Type", "application/json")
+            .post(body.toRequestBody(JSON_MEDIA))
+        return exec(builder.build())
     }
 
     private suspend fun obtainClientApiKey(): String {
@@ -229,7 +251,6 @@ class DisneyApi(
 
     private companion object {
         const val WATCH_TAG = "DisneyWatch"
-        const val RAW_LOG_LIMIT = 4000
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
         const val BROWSER_UA =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"

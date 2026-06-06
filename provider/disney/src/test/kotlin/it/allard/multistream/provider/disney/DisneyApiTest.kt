@@ -1,5 +1,6 @@
 package it.allard.multistream.provider.disney
 
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
@@ -145,6 +146,46 @@ class DisneyApiTest {
         assertEquals("A jazz pianist finds his spark.", d?.synopsis)
         assertEquals(2020, d?.year)
         assertEquals(listOf("Jamie Foxx"), d?.cast)
+    }
+
+    @Test fun fetchWatchedEpisodes_batchesPidsAndReadsProgress() = runBlocking {
+        // Entity page yields the season refs; each season's items carry a personalization pid.
+        server.enqueue(
+            jsonBody(
+                """{"data":{"page":{"containers":[
+                   {"type":"episodes","seasons":[{"id":"s1","visuals":{"name":"Season 1"}}]}
+                ]}}}""",
+            ),
+        )
+        server.enqueue(
+            jsonBody(
+                """{"data":{"season":{"items":[
+                   {"personalization":{"pid":"PID1"},"visuals":{"seasonNumber":"1","episodeNumber":"1","durationMs":1800000}},
+                   {"personalization":{"pid":"PID2"},"visuals":{"seasonNumber":"1","episodeNumber":"2","durationMs":1800000}},
+                   {"personalization":{"pid":"PID3"},"visuals":{"seasonNumber":"1","episodeNumber":"3","durationMs":1800000}}
+                ]}}}""",
+            ),
+        )
+        // Progress comes from the batch userState lookup: E1 finished (100), E2 part-watched (40),
+        // E3 finished as a 0..1 fraction (0.97) which is scaled to a percentage.
+        server.enqueue(
+            jsonBody(
+                """{"data":{"entityStates":{
+                   "PID1":{"progress":{"progressPercentage":100}},
+                   "PID2":{"progress":{"progressPercentage":40}},
+                   "PID3":{"progress":{"progressPercentage":0.97}}
+                }}}""",
+            ),
+        )
+        val watched = api.fetchWatchedEpisodes("e1", "FINAL")
+        assertEquals(setOf(EpisodeCoord(1, 1), EpisodeCoord(1, 3)), watched.toSet())
+        assertTrue(server.takeRequest().path!!.contains("/explore/v1.9/page/entity-e1"))
+        assertTrue(server.takeRequest().path!!.contains("/explore/v1.7/season/s1"))
+        val userStateReq = server.takeRequest()
+        assertEquals("POST", userStateReq.method)
+        assertTrue(userStateReq.path!!.contains("/explore/v1.9/userState"))
+        val body = userStateReq.body.readUtf8()
+        assertTrue(body.contains("PID1") && body.contains("PID3"))
     }
 
     private fun jsonBody(body: String) =

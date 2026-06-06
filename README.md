@@ -86,8 +86,9 @@ fetching one page per season so every season is covered.
 
 Where a service exposes it, the detail screen also offers "Sync watched from <service>", which
 imports which episodes you have already watched there into your local history. This is verified for
-Netflix, Plex and Prime Video (Prime reads each episode's playback progress across every season);
-Disney+ is experimental.
+Netflix, Plex, Prime Video and Disney+. Prime reads each episode's playback progress across every
+season; Disney+ collects every episode's id and batches them through its userState lookup, since its
+catalog carries no inline progress.
 
 ## Login
 

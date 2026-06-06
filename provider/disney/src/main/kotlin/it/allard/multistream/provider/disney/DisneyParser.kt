@@ -10,15 +10,18 @@ import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.array
-import it.allard.multistream.core.net.bool
 import it.allard.multistream.core.net.int
 import it.allard.multistream.core.net.long
 import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+
+/** A playable Disney+ episode: its personalization pid (the /userState lookup key) and coordinates. */
+data class DisneyEpisodeRef(val pid: String, val season: Int, val episode: Int, val durationMs: Long?)
 
 /**
  * Parse Disney+ explore search responses: data.page.containers[].items[] where each item carries
@@ -154,72 +157,61 @@ object DisneyParser {
     // Watched-detection threshold: a progress percentage at/above this counts the episode as finished.
     private const val WATCHED_PERCENT = 95.0
 
-    // Candidate progress percentage fields on a season item (or its visuals/progress object). The real
-    // field is unknown, so log the raw and probe each: confirm the actual one from the on-device log.
-    private val PROGRESS_FIELDS = listOf(
-        "percentage", "progress", "playhead", "bookmark", "viewedProgress",
-        "completionPercentage", "percentComplete", "percentageWatched", "playbackPercentage",
-    )
-
-    // Candidate boolean "watched/complete" flags on a season item (or nested progress object).
-    private val WATCHED_FLAGS = listOf("watched", "complete", "isWatched", "isComplete", "fullyWatched")
-
-    // Objects under which a progress/bookmark may be nested on a season item.
-    private val PROGRESS_CONTAINERS = listOf("progress", "bookmark", "watchhistory", "viewedProgress")
+    // Cap recursion depth when walking an explore response for episode items.
+    private const val MAX_DEPTH = 100
 
     /**
-     * Best-effort: episodes the member has watched, from a season page (`data.season.items`). Disney
-     * syncs progress server-side, but the exact field is unconfirmed, so this probes several candidate
-     * names (a percentage >= [WATCHED_PERCENT], or a watched/complete flag) at the item level, under
-     * `visuals`, and inside a nested progress/bookmark object. The episode number is read from
-     * `visuals.episodeNumber` like [parseEpisodes]. The RAW season JSON is logged by the Api so the real
-     * field can be confirmed and this tuned afterwards.
+     * Every playable episode in an explore response (a season page, or the inlined season on an entity
+     * page) as a [DisneyEpisodeRef]: its opaque personalization `pid` plus the season/episode numbers
+     * from `visuals`. The pid is the key the batch [watchedFromUserState] lookup uses. Items with no pid
+     * or no episode number (carousels, trailers, play/download actions) are skipped.
      */
-    fun parseWatchedEpisodes(seasonPage: JsonObject, seasonNumber: Int): List<EpisodeCoord> {
-        val items = seasonPage["data"].obj()?.get("season").obj()?.get("items").array() ?: return emptyList()
-        val out = mutableListOf<EpisodeCoord>()
-        for (item in items) {
-            val obj = item.obj() ?: continue
-            val number = obj["visuals"].obj()?.get("episodeNumber").int() ?: continue
-            if (isWatched(obj)) out += EpisodeCoord(seasonNumber, number)
-        }
-        return out
+    fun parseEpisodeRefs(root: JsonObject): List<DisneyEpisodeRef> {
+        val out = LinkedHashMap<String, DisneyEpisodeRef>()
+        collectEpisodeRefs(root, out)
+        return out.values.toList()
     }
 
-    /** Probe an episode item (and its visuals + nested progress objects) for any watched signal. */
-    private fun isWatched(item: JsonObject): Boolean {
-        val scopes = listOfNotNull(item, item["visuals"].obj()) +
-            PROGRESS_CONTAINERS.flatMapNotNull { key ->
-                listOf(item[key].obj(), item["visuals"].obj()?.get(key).obj())
+    private fun collectEpisodeRefs(element: JsonElement, out: MutableMap<String, DisneyEpisodeRef>, depth: Int = 0) {
+        if (depth > MAX_DEPTH) return
+        when (element) {
+            is JsonObject -> {
+                val visuals = element["visuals"].obj()
+                if (visuals != null) {
+                    val pid = element["personalization"].obj()?.get("pid").string()
+                    val season = visuals["seasonNumber"].string()?.toIntOrNull()
+                    val episode = visuals["episodeNumber"].string()?.toIntOrNull()
+                    if (pid != null && season != null && episode != null) {
+                        out.putIfAbsent(pid, DisneyEpisodeRef(pid, season, episode, visuals["durationMs"].long()))
+                    }
+                }
+                element.values.forEach { collectEpisodeRefs(it, out, depth + 1) }
             }
-        return scopes.any { scope ->
-            PROGRESS_FIELDS.any { (progressPercent(scope[it]) ?: -1.0) >= WATCHED_PERCENT } ||
-                WATCHED_FLAGS.any { scope[it].bool() == true }
+            is JsonArray -> element.forEach { collectEpisodeRefs(it, out, depth + 1) }
+            else -> Unit
         }
     }
 
-    /** Coerce a candidate progress value to a percentage: a 0..1 fraction is scaled to 0..100. */
+    /**
+     * The episodes a member has finished, from the batch `/userState` response (`data.entityStates`
+     * keyed by pid) and the [refs] collected from the season pages. Disney exposes no boolean watched
+     * flag, so an episode counts as watched once its `progress.progressPercentage` reaches
+     * [WATCHED_PERCENT]. A pid absent from `entityStates` (or at 0) is unwatched.
+     */
+    fun watchedFromUserState(userState: JsonObject, refs: List<DisneyEpisodeRef>): List<EpisodeCoord> {
+        val states = userState["data"].obj()?.get("entityStates").obj() ?: return emptyList()
+        val out = LinkedHashSet<EpisodeCoord>()
+        for (ref in refs) {
+            val percent = progressPercent(states[ref.pid].obj()?.get("progress").obj()?.get("progressPercentage"))
+            if (percent != null && percent >= WATCHED_PERCENT) out += EpisodeCoord(ref.season, ref.episode)
+        }
+        return out.toList()
+    }
+
+    /** Coerce a progress value to a percentage: a 0..1 fraction is scaled to 0..100. */
     private fun progressPercent(element: JsonElement?): Double? {
         val value = element.string()?.toDoubleOrNull() ?: return null
         return if (value in 0.0..1.0) value * 100.0 else value
-    }
-
-    /** Compact per-episode progress summary for on-device diagnosis (`S1E1:<field>=<val>`). */
-    fun watchDebug(seasonPage: JsonObject, seasonNumber: Int): String {
-        val items = seasonPage["data"].obj()?.get("season").obj()?.get("items").array() ?: return ""
-        val sb = StringBuilder()
-        for (item in items) {
-            val obj = item.obj() ?: continue
-            val number = obj["visuals"].obj()?.get("episodeNumber").int() ?: continue
-            val scopes = listOfNotNull(obj, obj["visuals"].obj())
-            val found = scopes.firstNotNullOfOrNull { scope ->
-                (PROGRESS_FIELDS + WATCHED_FLAGS).firstNotNullOfOrNull { field ->
-                    scope[field]?.let { "$field=${it.string() ?: it}" }
-                }
-            } ?: "-"
-            sb.append("S${seasonNumber}E$number:$found ")
-        }
-        return sb.toString().trim()
     }
 
     private fun <T, R> List<T>.flatMapNotNull(transform: (T) -> List<R?>): List<R> =
