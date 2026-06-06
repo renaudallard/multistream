@@ -153,6 +153,19 @@ class ReconcileTest {
             )
         )
         assertEquals(2, merged.size)
+        // The two cards must also carry distinct keys, or the search list crashes on a duplicate key.
+        assertEquals(2, merged.map { it.key.serialize() }.distinct().size)
+    }
+
+    @Test fun identical_empty_normalized_titles_still_merge() {
+        val merged = mergeResults(
+            listOf(
+                result(ProviderId.NETFLIX, "!!!", 2020, MediaType.MOVIE),
+                result(ProviderId.PRIME, "!!!", 2020, MediaType.MOVIE),
+            )
+        )
+        assertEquals(1, merged.size)
+        assertEquals(2, merged.first().availabilities.size)
     }
 
     @Test fun rows_sharing_only_a_secondary_id_merge() {

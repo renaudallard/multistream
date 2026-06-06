@@ -26,6 +26,12 @@ fun normalizeTitle(raw: String): String {
     val noDiacritics = Normalizer.normalize(lower, Normalizer.Form.NFD).replace(DIACRITICS, "")
     val alnum = noDiacritics.replace(NON_ALNUM, " ").trim()
     val collapsed = alnum.replace(WHITESPACE, " ")
+    // A title made only of punctuation or non-Latin script normalizes to nothing; key it by a stable
+    // digest of the raw text so two such titles get distinct TitleKeys instead of colliding.
+    if (collapsed.isEmpty()) {
+        val trimmed = raw.trim()
+        return if (trimmed.isEmpty()) "" else "u" + Integer.toHexString(trimmed.lowercase().hashCode())
+    }
     val sep = collapsed.indexOf(' ')
     if (sep <= 0) return collapsed
     val first = collapsed.substring(0, sep)
@@ -66,12 +72,10 @@ fun mergeResults(
     val (external, heuristic) = results.partition { hasExternalId(it.externalIds) }
     groupByExternalIds(external).forEach { out += toTitle(it, providerPriority) }
 
-    // A title that normalizes to nothing (punctuation or non-Latin only) carries no usable key, so
-    // keep each such row as its own card rather than collapsing unrelated works into one.
-    val (unnamed, named) = heuristic.partition { normalizeTitle(it.title).isEmpty() }
-    named.groupBy { it.type to normalizeTitle(it.title) }
+    // normalizeTitle keys punctuation/non-Latin-only titles by a stable per-title digest, so distinct
+    // such works land in distinct groups (and identical ones still merge) without a special case here.
+    heuristic.groupBy { it.type to normalizeTitle(it.title) }
         .forEach { (_, members) -> clusterByYear(members).forEach { out += toTitle(it, providerPriority) } }
-    unnamed.forEach { out += toTitle(listOf(it), providerPriority) }
 
     return out
 }
