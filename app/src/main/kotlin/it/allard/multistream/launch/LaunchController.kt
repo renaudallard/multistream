@@ -25,7 +25,14 @@ class LaunchController(context: Context) {
         episode: EpisodeCoord? = null,
         query: String? = null,
     ): String = withContext(Dispatchers.IO) {
-        when (val action = LaunchResolver.resolve(appContext, provider, ref, episode, query)) {
+        // Resolution runs provider and PackageManager code that can throw; treat a failure as
+        // unavailable instead of letting it escape and crash the caller.
+        val action = try {
+            LaunchResolver.resolve(appContext, provider, ref, episode, query)
+        } catch (e: RuntimeException) {
+            LaunchAction.Unavailable
+        }
+        when (action) {
             is LaunchAction.Start ->
                 if (startSafely(action.intent)) {
                     appContext.getString(R.string.launch_opening, provider.displayName)
@@ -46,8 +53,11 @@ class LaunchController(context: Context) {
             openStore(provider.packageName)
             return@withContext appContext.getString(R.string.launch_not_installed, provider.displayName)
         }
-        val intent = provider.launchAppFallback(appContext, query)
-            ?: Launcher.launchApp(appContext, provider.packageName)
+        val intent = try {
+            provider.launchAppFallback(appContext, query) ?: Launcher.launchApp(appContext, provider.packageName)
+        } catch (e: RuntimeException) {
+            null
+        }
         if (intent != null && startSafely(intent)) {
             appContext.getString(R.string.launch_opening, provider.displayName)
         } else {
