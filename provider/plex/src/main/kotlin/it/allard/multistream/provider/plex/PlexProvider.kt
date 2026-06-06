@@ -15,6 +15,7 @@ import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.SessionState
 import it.allard.multistream.provider.api.StreamingProvider
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
 
 /**
  * Plex. Search works anonymously against Plex Discover. The optional login is the plex.tv/link device
@@ -81,6 +82,11 @@ class PlexProvider(
             server = config.secrets.extra["server"]
             accountToken = config.secrets.extra["account"]
         }
+        // Make the server token available to the image loader by host so posters authenticate, even
+        // after a restart when the in-memory map is otherwise empty until the first server search.
+        val srv = server
+        val tok = token
+        if (srv != null && tok != null) PlexImageAuth.register(srv, tok)
         // Search always works (anonymous Discover when logged out); a server is optional.
         return SessionState.Ready
     }
@@ -98,7 +104,7 @@ class PlexProvider(
             }
         } catch (e: PlexApiException) {
             // A bad/unreachable server must never blank out search: fall back to Discover.
-            runCatching { api.search(query, discoverToken) }.getOrDefault(emptyList())
+            runCatchingExceptCancellation { api.search(query, discoverToken) }.getOrDefault(emptyList())
         }
     }
 
@@ -106,7 +112,7 @@ class PlexProvider(
         ensureSession(config)
         val serverUrl = server ?: return null
         val serverToken = token ?: return null
-        return runCatching { api.getDetails(serverUrl, serverToken, ref.providerTitleId, ref) }.getOrNull()
+        return runCatchingExceptCancellation { api.getDetails(serverUrl, serverToken, ref.providerTitleId, ref) }.getOrNull()
     }
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
