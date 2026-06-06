@@ -94,12 +94,16 @@ class WatchRepository(private val db: MultistreamDatabase) {
 
     /** The stored launch target for a tracked title, for opening it after the index is gone. */
     suspend fun launchRef(key: TitleKey): ProviderRef? =
-        dao.providerPrefs(key.serialize()).firstOrNull()?.let { pref ->
-            ProviderRef(
-                provider = ProviderId.valueOf(pref.provider),
-                providerTitleId = pref.providerTitleId,
-                deepLinkHint = pref.deepLinkHint,
-            )
+        dao.providerPrefs(key.serialize()).firstNotNullOfOrNull { pref ->
+            // Resolve the stored provider name safely: an unknown name (e.g. a provider removed in a
+            // later version) must not throw and crash the Library "Open" coroutine.
+            ProviderId.entries.firstOrNull { it.name == pref.provider }?.let { provider ->
+                ProviderRef(
+                    provider = provider,
+                    providerTitleId = pref.providerTitleId,
+                    deepLinkHint = pref.deepLinkHint,
+                )
+            }
         }
 
     suspend fun setInWatchlist(title: Title, inList: Boolean) {
