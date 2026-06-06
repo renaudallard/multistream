@@ -8,6 +8,7 @@ import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.Launcher
 import it.allard.multistream.provider.api.LinkSession
@@ -34,6 +35,7 @@ class PlexProvider(
     override val capabilities = ProviderCapabilities(
         canSearch = true,
         canGetDetails = true,
+        canListEpisodes = true,
         canFetchWatchState = true,
         canDeepLinkToTitle = true,
         requiresAuth = false,
@@ -114,6 +116,17 @@ class PlexProvider(
         val serverUrl = server ?: return null
         val serverToken = token ?: return null
         return runCatchingExceptCancellation { api.getDetails(serverUrl, serverToken, ref.providerTitleId, ref) }.getOrNull()
+    }
+
+    override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> {
+        ensureSession(config)
+        // Episodes come only from the user's own server (allLeaves on the show's ratingKey); a
+        // Discover-only result has no server item, so without a server/token there is nothing to list.
+        val serverUrl = server ?: return emptyList()
+        val serverToken = token ?: return emptyList()
+        return runCatchingExceptCancellation {
+            api.getSeasons(serverUrl, serverToken, ref.providerTitleId)
+        }.getOrDefault(emptyList())
     }
 
     override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> {

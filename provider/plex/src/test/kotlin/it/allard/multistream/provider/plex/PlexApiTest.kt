@@ -141,6 +141,39 @@ class PlexApiTest {
         assertEquals("TKN", request.getHeader("X-Plex-Token"))
     }
 
+    @Test fun getSeasons_groupsEpisodesBySeason() = runBlocking {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"MediaContainer":{"Metadata":[
+                  {"type":"episode","ratingKey":"201","parentIndex":2,"index":1,"parentTitle":"Season 2","title":"Return","summary":"They come back.","duration":2700000},
+                  {"type":"episode","ratingKey":"102","parentIndex":1,"index":2,"parentTitle":"Season 1","title":"Second","duration":1800000},
+                  {"type":"episode","ratingKey":"101","parentIndex":1,"index":1,"parentTitle":"Season 1","title":"Pilot","summary":"It begins."}
+                ]}}
+                """.trimIndent(),
+            ),
+        )
+        val base = server.url("/").toString().removeSuffix("/")
+        val seasons = api.getSeasons(base, "TKN", "99")
+        assertEquals(2, seasons.size)
+        // Seasons are ordered, episodes within a season are ordered by number.
+        assertEquals(1, seasons[0].seasonNumber)
+        assertEquals("Season 1", seasons[0].title)
+        assertEquals(listOf(1, 2), seasons[0].episodes.map { it.episodeNumber })
+        val pilot = seasons[0].episodes[0]
+        assertEquals("Pilot", pilot.title)
+        assertEquals("It begins.", pilot.synopsis)
+        assertEquals(ProviderRef(ProviderId.PLEX, "101"), pilot.providerRefs.single())
+        // 1800000 ms / 60000 = 30 minutes.
+        assertEquals(30, seasons[0].episodes[1].runtimeMin)
+        assertEquals(2, seasons[1].seasonNumber)
+        assertEquals("Return", seasons[1].episodes.single().title)
+        assertEquals(45, seasons[1].episodes.single().runtimeMin)
+        val request = server.takeRequest()
+        assertTrue(request.path!!.contains("/library/metadata/99/allLeaves"))
+        assertEquals("TKN", request.getHeader("X-Plex-Token"))
+    }
+
     @Test fun verifyServer_failsOnUnauthorizedToken() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(401))
         val base = server.url("/").toString().removeSuffix("/")

@@ -1,10 +1,12 @@
 package it.allard.multistream.provider.plex
 
 import it.allard.multistream.core.model.AvailabilityType
+import it.allard.multistream.core.model.Episode
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.array
 import it.allard.multistream.core.net.int
@@ -83,6 +85,37 @@ object PlexParser {
             val number = episode["index"].int() ?: return@mapNotNull null
             if ((episode["viewCount"].int() ?: 0) > 0) EpisodeCoord(season, number) else null
         }
+
+    /**
+     * Seasons and their episodes from the same `allLeaves` response (`MediaContainer.Metadata[]`, one
+     * entry per episode flattened across seasons). Episodes are grouped into one [Season] per distinct
+     * `parentIndex` (season title from `parentTitle` when present), ordered by season then episode
+     * number. `duration` is in milliseconds; each episode carries a per-episode [ProviderRef] (its own
+     * `ratingKey`) so a single episode can be launched later.
+     */
+    fun parseSeasons(root: JsonObject): List<Season> =
+        episodes(root).mapNotNull { episode ->
+            val seasonNumber = episode["parentIndex"].int() ?: return@mapNotNull null
+            val number = episode["index"].int() ?: return@mapNotNull null
+            seasonNumber to Episode(
+                seasonNumber = seasonNumber,
+                episodeNumber = number,
+                title = episode["title"].string()?.takeIf { it.isNotBlank() },
+                synopsis = episode["summary"].string()?.takeIf { it.isNotBlank() },
+                runtimeMin = episode["duration"].int()?.takeIf { it > 0 }?.let { it / 60000 },
+                providerRefs = episode["ratingKey"].string()
+                    ?.let { listOf(ProviderRef(ProviderId.PLEX, it)) }.orEmpty(),
+            ) to episode["parentTitle"].string()?.takeIf { it.isNotBlank() }
+        }
+            .groupBy { it.first.first }
+            .toSortedMap()
+            .map { (seasonNumber, entries) ->
+                Season(
+                    seasonNumber = seasonNumber,
+                    title = entries.firstNotNullOfOrNull { it.second },
+                    episodes = entries.map { it.first.second }.sortedBy { it.episodeNumber },
+                )
+            }
 
     /**
      * Compact per-episode summary (`S<parentIndex>E<index>:viewCount`, with the resume offset appended

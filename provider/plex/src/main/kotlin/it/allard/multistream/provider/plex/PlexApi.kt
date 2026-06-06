@@ -5,6 +5,7 @@ import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderTitleDetails
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.array
@@ -183,6 +184,21 @@ class PlexApi(
                     "| raw=${body.take(MAX_RAW_LOG)}",
             )
             return watched
+        }
+    }
+
+    /**
+     * Seasons and their episodes for a show on the member's own Plex Media Server. Reuses the same
+     * `allLeaves` call as the watch fetch (every episode flattened, each with its season `parentIndex`,
+     * number `index`, `title`, `summary` and `duration` in ms), grouped into one [Season] per season.
+     */
+    suspend fun getSeasons(serverUrl: String, token: String, ratingKey: String): List<Season> {
+        val url = "${serverUrl.trimEnd('/')}/library/metadata/$ratingKey/allLeaves"
+        client.await(Request.Builder().url(url).headers(headers(token)).get().build()).use { response ->
+            if (response.code == 401) throw PlexApiException("Unauthorized", authError = true)
+            if (!response.isSuccessful) throw PlexApiException("HTTP ${response.code}")
+            val root = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj() ?: return emptyList()
+            return PlexParser.parseSeasons(root)
         }
     }
 
