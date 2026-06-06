@@ -15,6 +15,7 @@ import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
 import it.allard.multistream.provider.api.WebLoginSpec
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import java.net.URLEncoder
 
 /**
@@ -42,13 +43,13 @@ class RtlProvider(
     override fun supportedRegions(): Set<Region> = setOf(Region("BE"))
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
-        runCatching { api.search(query, region) }.getOrDefault(emptyList())
+        runCatchingExceptCancellation { api.search(query, region) }.getOrDefault(emptyList())
 
     override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? =
-        runCatching { api.getDetails(ref.providerTitleId, ref) }.getOrNull()
+        runCatchingExceptCancellation { api.getDetails(ref.providerTitleId, ref) }.getOrNull()
 
     override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> =
-        runCatching { api.getSeasons(ref.providerTitleId) }.getOrDefault(emptyList())
+        runCatchingExceptCancellation { api.getSeasons(ref.providerTitleId) }.getOrDefault(emptyList())
 
     override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
         loginUrl = "https://sso.rtl.be/",

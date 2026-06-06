@@ -12,6 +12,7 @@ import it.allard.multistream.core.net.buildClient
 import it.allard.multistream.core.net.int
 import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
 import okhttp3.FormBody
@@ -99,7 +100,7 @@ class PlexApi(
         return null
     }
 
-    private suspend fun probe(serverUrl: String, token: String): Boolean = runCatching {
+    private suspend fun probe(serverUrl: String, token: String): Boolean = runCatchingExceptCancellation {
         probeClient.await(Request.Builder().url("${serverUrl.trimEnd('/')}/identity").headers(headers(token)).get().build())
             .use { it.isSuccessful }
     }.getOrDefault(false)
