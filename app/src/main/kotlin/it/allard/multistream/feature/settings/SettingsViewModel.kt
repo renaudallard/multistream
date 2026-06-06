@@ -54,6 +54,18 @@ class SettingsViewModel(
         }
     }
 
+    /**
+     * Re-read which providers still have a stored session. A provider can clear its own session
+     * during a search (a dead refresh token), so the screen re-reads on resume to reflect that
+     * instead of showing a stale "logged in". Called when no login is in flight, so a plain replace
+     * is safe.
+     */
+    fun refreshLoginState() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _loggedIn.value = registry.providers.associate { it.id to !secrets().read(it.id).isEmpty }
+        }
+    }
+
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
