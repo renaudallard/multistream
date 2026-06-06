@@ -52,6 +52,7 @@
     <string name="settings_link_approve">Approve the sign-in in your browser, then come back here.</string>
     <string name="settings_link_waiting">Waiting for you to approve…</string>
     <string name="settings_link_cancel">Cancel</string>
+    <string name="weblogin_finish">I\'m signed in — finish</string>
 
     <!-- Settings: capability chips -->
     <string name="capability_search">Search</string>
