@@ -178,4 +178,38 @@ class ReconcileTest {
         assertEquals(1, merged.size)
         assertEquals(2, merged.first().availabilities.size)
     }
+
+    private fun ep(season: Int, episode: Int, title: String? = null, synopsis: String? = null, ref: ProviderRef? = null) =
+        Episode(season, episode, title = title, synopsis = synopsis, providerRefs = listOfNotNull(ref))
+
+    @Test fun mergeSeasons_unions_partial_runs_from_each_provider() {
+        val plexRef = ProviderRef(ProviderId.PLEX, "plex-1")
+        val primeRef = ProviderRef(ProviderId.PRIME, "prime-1")
+        // Plex carries S1E1, S1E2, S2E1; Prime carries S1E2, S1E3, S2E2. Neither has the full run.
+        val plex = listOf(
+            Season(1, "Saison 1", listOf(ep(1, 1, title = "Heat", ref = plexRef), ep(1, 2, ref = plexRef))),
+            Season(2, null, listOf(ep(2, 1, ref = plexRef))),
+        )
+        val prime = listOf(
+            Season(1, null, listOf(ep(1, 2, synopsis = "From Prime", ref = primeRef), ep(1, 3, title = "Cold", ref = primeRef))),
+            Season(2, null, listOf(ep(2, 2, ref = primeRef))),
+        )
+        val merged = mergeSeasons(listOf(plex, prime))
+
+        assertEquals(listOf(1, 2), merged.map { it.seasonNumber })
+        // Season 1 holds the union E1..E3 in order, season 2 holds E1 and E2.
+        assertEquals(listOf(1, 2, 3), merged[0].episodes.map { it.episodeNumber })
+        assertEquals(listOf(1, 2), merged[1].episodes.map { it.episodeNumber })
+        // The first non-null season title wins (Plex's), even though Prime's season 1 is untitled.
+        assertEquals("Saison 1", merged[0].title)
+        // The shared episode keeps Plex's title and fills its missing synopsis from Prime, and its
+        // provider refs accumulate so it can be launched on either service.
+        val shared = merged[0].episodes[1]
+        assertEquals("From Prime", shared.synopsis)
+        assertEquals(listOf(plexRef, primeRef), shared.providerRefs)
+    }
+
+    @Test fun mergeSeasons_returns_empty_when_no_provider_lists_episodes() {
+        assertTrue(mergeSeasons(listOf(emptyList(), emptyList())).isEmpty())
+    }
 }

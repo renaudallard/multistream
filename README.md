@@ -28,6 +28,7 @@ The ten services: **Netflix**, **Disney+**, **Prime Video**, **Molotov**, **Zatt
 
 - [How it works](#how-it-works)
 - [Services and capabilities](#services-and-capabilities)
+- [Episodes and watched state](#episodes-and-watched-state)
 - [Login](#login)
 - [Deep links](#deep-links)
 - [Modules](#modules)
@@ -45,6 +46,8 @@ and tracks. There is no DI framework. A small hand-written `AppGraph` wires ever
 the providers into a registry, so one flaky provider never breaks the app. Search fans out to every
 enabled provider in parallel, merges the rows into one card per title across services, and ranks the
 list by how closely each title matches the query (a full-phrase match before partial-word ones).
+Opening a series lists its episodes by asking every provider that can enumerate them and unioning the
+results, so a service carrying the full run completes one that holds only part of it.
 
 ## Services and capabilities
 
@@ -73,6 +76,18 @@ shows wherever search returns one); `—` providers show the poster, title and y
 
 Live search is verified on a real device across all ten services. A small built-in sample catalog
 also ships for an offline demo; live search itself runs only on a device with network.
+
+## Episodes and watched state
+
+Opening a series fetches its episodes from every provider that can enumerate them and unions them by
+season and episode number, so a service carrying the full run completes one that holds only part of
+it. Plex lists episodes from your own server; Prime Video reads them from the signed-in detail page,
+fetching one page per season so every season is covered.
+
+Where a service exposes it, the detail screen also offers "Sync watched from <service>", which
+imports which episodes you have already watched there into your local history. This is verified for
+Netflix, Plex and Prime Video (Prime reads each episode's playback progress across every season);
+Disney+ is experimental.
 
 ## Login
 

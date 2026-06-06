@@ -199,3 +199,33 @@ private fun toTitle(members: List<UnifiedSearchResult>, priority: List<ProviderI
         availabilities = availabilities,
     )
 }
+
+/**
+ * Merge episode lists fetched from several providers into one complete run: episodes are unioned by
+ * (season, episode) number, so a provider with the full series fills the gaps of one that only carries
+ * part of it. The first non-null title/synopsis/runtime/still wins and each episode's provider refs
+ * accumulate. Seasons and episodes come back sorted.
+ */
+fun mergeSeasons(perProvider: List<List<Season>>): List<Season> {
+    val merged = LinkedHashMap<Pair<Int, Int>, Episode>()
+    val seasonTitles = LinkedHashMap<Int, String>()
+    for (season in perProvider.flatten()) {
+        season.title?.let { seasonTitles.putIfAbsent(season.seasonNumber, it) }
+        for (ep in season.episodes) {
+            val key = ep.seasonNumber to ep.episodeNumber
+            val existing = merged[key]
+            merged[key] = if (existing == null) ep else existing.copy(
+                title = existing.title ?: ep.title,
+                synopsis = existing.synopsis ?: ep.synopsis,
+                runtimeMin = existing.runtimeMin ?: ep.runtimeMin,
+                stillUrl = existing.stillUrl ?: ep.stillUrl,
+                providerRefs = existing.providerRefs + ep.providerRefs,
+            )
+        }
+    }
+    return merged.values
+        .groupBy { it.seasonNumber }
+        .toList()
+        .sortedBy { it.first }
+        .map { (number, eps) -> Season(number, seasonTitles[number], eps.sortedBy { it.episodeNumber }) }
+}

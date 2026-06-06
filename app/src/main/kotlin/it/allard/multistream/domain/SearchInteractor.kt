@@ -6,16 +6,20 @@ import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.Title
 import it.allard.multistream.core.model.TitleKey
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.model.mergeResults
+import it.allard.multistream.core.model.mergeSeasons
 import it.allard.multistream.core.model.rankByRelevance
 import it.allard.multistream.di.ProviderRegistry
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
 import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -101,10 +105,15 @@ class SearchInteractor(
             }
         }
         if (title.type == MediaType.SERIES && title.seasons.isEmpty()) {
-            title.episodeProvider()?.let { (provider, ref) ->
-                val seasons = orDefault(emptyList()) { provider.getSeasons(ref, configFor(provider, ref)) }
-                if (seasons.isNotEmpty()) title = title.copy(seasons = seasons)
+            // Enumerate episodes on every provider that can list them, in parallel, and union the
+            // results: a provider with the full run fills the gaps of one that only carries part of it.
+            val perProvider = coroutineScope {
+                title.episodeProviders().map { (provider, ref) ->
+                    async { orDefault(emptyList<Season>()) { provider.getSeasons(ref, configFor(provider, ref)) } }
+                }.awaitAll()
             }
+            val merged = mergeSeasons(perProvider)
+            if (merged.isNotEmpty()) title = title.copy(seasons = merged)
         }
         title
     }
@@ -113,9 +122,10 @@ class SearchInteractor(
         availabilities.firstOrNull { registry.get(it.provider)?.capabilities?.canGetDetails == true }
             ?.let { a -> registry.get(a.provider)?.let { it to a.ref } }
 
-    private fun Title.episodeProvider(): Pair<StreamingProvider, ProviderRef>? =
-        availabilities.firstOrNull { registry.get(it.provider)?.capabilities?.canListEpisodes == true }
-            ?.let { a -> registry.get(a.provider)?.let { it to a.ref } }
+    private fun Title.episodeProviders(): List<Pair<StreamingProvider, ProviderRef>> =
+        availabilities.mapNotNull { a ->
+            registry.get(a.provider)?.takeIf { it.capabilities.canListEpisodes }?.let { it to a.ref }
+        }
 
     private fun Title.watchStateProvider(): Pair<StreamingProvider, ProviderRef>? =
         availabilities.firstOrNull { registry.get(it.provider)?.capabilities?.canFetchWatchState == true }
