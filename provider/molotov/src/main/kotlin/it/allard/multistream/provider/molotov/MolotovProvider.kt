@@ -13,6 +13,9 @@ import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.SessionState
 import it.allard.multistream.provider.api.StreamingProvider
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Molotov (French live TV + replay). Search runs against the molotov front API; launch opens the
@@ -36,6 +39,7 @@ class MolotovProvider(
 
     @Volatile
     private var accessToken: String? = null
+    private val sessionMutex = Mutex()
 
     override suspend fun login(username: String, password: String): ProviderSecrets {
         val tokens = api.login(username, password)
@@ -61,17 +65,28 @@ class MolotovProvider(
     }
 
     private suspend fun retryAfterAuth(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
-        val tokens = runCatching { config.secrets.refreshToken?.let { api.refresh(it) } }.getOrNull()
-        if (tokens == null) {
-            // No password is stored, so we cannot silently re-login: clear the dead session so the
-            // user shows as logged out and can sign in again from Settings.
-            accessToken = null
-            config.persistSecrets?.invoke(ProviderSecrets.EMPTY)
-            return emptyList()
+        val fresh = refreshSession(config, accessToken) ?: return emptyList()
+        return runCatchingExceptCancellation { api.search(query, fresh, region) }.getOrDefault(emptyList())
+    }
+
+    /** Refresh the session once, persisting the rotated token. Returns the new access token or null. */
+    private suspend fun refreshSession(config: ProviderConfig, staleToken: String?): String? = sessionMutex.withLock {
+        // Another caller may have refreshed while we waited for the lock.
+        accessToken?.let { if (it != staleToken) return@withLock it }
+        val refreshToken = config.secrets.refreshToken ?: return@withLock null
+        val tokens = runCatchingExceptCancellation { api.refresh(refreshToken) }.getOrElse { error ->
+            // Only a genuine auth rejection means the refresh token is dead: clear the session so the
+            // user re-logs in. A transient/network error keeps the token for a later retry, and
+            // cancellation has already propagated.
+            if (error is MolotovApiException && error.authError) {
+                accessToken = null
+                config.persistSecrets?.invoke(ProviderSecrets.EMPTY)
+            }
+            return@withLock null
         }
         accessToken = tokens.accessToken
         persistRotated(tokens, config)
-        return runCatching { api.search(query, tokens.accessToken, region) }.getOrDefault(emptyList())
+        tokens.accessToken
     }
 
     /** Persist a refreshed session so the rotated refresh token survives a restart. */
