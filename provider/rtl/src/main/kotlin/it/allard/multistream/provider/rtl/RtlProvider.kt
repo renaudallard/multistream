@@ -5,7 +5,6 @@ import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
-import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Season
@@ -14,15 +13,14 @@ import it.allard.multistream.provider.api.Launcher
 import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
-import it.allard.multistream.provider.api.WebLoginSpec
 import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import java.net.URLEncoder
 
 /**
  * RTL Play (Belgian RTL, DPG Media). Catalog search runs anonymously against DPG's lfvp platform
  * (`lfvp-api.dpgmedia.net/RTL_PLAY/search`, the same backend as VTM GO), which is geo-restricted to
- * Belgium. Launch deep-links to the title page (`rtlplay.be/rtlplay/<slug>~<detailId>`). The optional
- * login points at RTL's account SSO (sso.rtl.be); it is not required for search.
+ * Belgium. Launch deep-links to the title page (`rtlplay.be/rtlplay/<slug>~<detailId>`). There is no
+ * login: the lfvp catalog is anonymous and the account SSO cookie is for a different host entirely.
  */
 class RtlProvider(
     private val api: RtlApi = RtlApi(),
@@ -37,7 +35,6 @@ class RtlProvider(
         canDeepLinkToTitle = true,
         canInAppSearchDeepLink = true,
         requiresAuth = false,
-        optionalLogin = true,
     )
 
     override fun supportedRegions(): Set<Region> = setOf(Region("BE"))
@@ -50,15 +47,6 @@ class RtlProvider(
 
     override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> =
         runCatchingExceptCancellation { api.getSeasons(ref.providerTitleId) }.getOrDefault(emptyList())
-
-    override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
-        loginUrl = "https://sso.rtl.be/",
-        cookieUrl = "https://sso.rtl.be",
-        successCookie = "",
-        autoCapture = false,
-    )
-
-    override suspend fun loginWithCookies(cookies: String): ProviderSecrets = ProviderSecrets(cookie = cookies)
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
         val url = ref.deepLinkHint ?: return Launcher.launchApp(context, packageName)
