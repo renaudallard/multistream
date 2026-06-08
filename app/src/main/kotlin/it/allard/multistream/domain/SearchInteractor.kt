@@ -53,7 +53,10 @@ class SearchInteractor(
         },
     )
 
-    fun search(query: String): Flow<SearchUpdate> = channelFlow {
+    fun search(rawQuery: String): Flow<SearchUpdate> = channelFlow {
+        // Trim here so leading/trailing whitespace never reaches a provider API (some backends match
+        // " term" or "term " differently); this guards every caller, not just the UI's submit().
+        val query = rawQuery.trim()
         val providers = registry.searchable()
         val accumulated = mutableListOf<UnifiedSearchResult>()
         synchronized(accumulated) { accumulated.addAll(SampleCatalog.search(query)) }
