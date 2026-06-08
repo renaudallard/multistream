@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/banner.png" alt="multistream: one app, every catalog">
+  <img src="docs/icon.png" alt="multistream" width="160">
 </p>
 
 <h1 align="center">multistream</h1>
