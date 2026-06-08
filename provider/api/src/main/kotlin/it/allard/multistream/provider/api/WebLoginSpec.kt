@@ -18,4 +18,10 @@ data class WebLoginSpec(
     // When false, the login is not auto-detected from [successCookie] (which would fire too early
     // for Netflix, whose NetflixId cookie is set on page load); the user confirms with the button.
     val autoCapture: Boolean = true,
+    // For OAuth implicit flows (ICI Tou.tv's Azure AD B2C) the credential is a token in the redirect
+    // URL fragment, not a cookie. When the WebView navigates to a URL starting with
+    // [tokenRedirectPrefix], the value of [tokenFragmentKey] from the `#fragment` is captured and
+    // handed to [StreamingProvider.loginWithCookies] instead of any cookie.
+    val tokenRedirectPrefix: String? = null,
+    val tokenFragmentKey: String? = null,
 )

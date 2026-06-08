@@ -197,6 +197,8 @@ private fun LoginSection(
                         webLoginSpec.successCookie,
                         webLoginSpec.logoutUrl,
                         webLoginSpec.autoCapture,
+                        webLoginSpec.tokenRedirectPrefix,
+                        webLoginSpec.tokenFragmentKey,
                     ),
                 )
             },

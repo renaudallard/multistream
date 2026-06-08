@@ -3,6 +3,7 @@ package it.allard.multistream
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -38,6 +39,8 @@ class WebLoginActivity : ComponentActivity() {
         val successCookie = intent.getStringExtra(EXTRA_SUCCESS_COOKIE).orEmpty()
         val logoutUrl = intent.getStringExtra(EXTRA_LOGOUT_URL).orEmpty()
         val autoCapture = intent.getBooleanExtra(EXTRA_AUTO_CAPTURE, true)
+        val tokenRedirectPrefix = intent.getStringExtra(EXTRA_TOKEN_REDIRECT)
+        val tokenFragmentKey = intent.getStringExtra(EXTRA_TOKEN_FRAGMENT_KEY)
         if (loginUrl.isBlank()) {
             finish()
             return
@@ -53,6 +56,19 @@ class WebLoginActivity : ComponentActivity() {
         // out), then wipe local state and load the real login. Success is captured only after that.
         var loginPhase = logoutUrl.isBlank()
         webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                // OAuth implicit flow: the access token is in the redirect URL fragment, so capture it
+                // as soon as the WebView navigates to the redirect target, before its page runs.
+                if (loginPhase && tokenRedirectPrefix != null && tokenFragmentKey != null &&
+                    url != null && url.startsWith(tokenRedirectPrefix)
+                ) {
+                    tokenFromFragment(url, tokenFragmentKey)?.let {
+                        view?.stopLoading()
+                        succeedWithValue(it)
+                    }
+                }
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 if (!loginPhase) {
                     loginPhase = true
@@ -123,18 +139,41 @@ class WebLoginActivity : ComponentActivity() {
         finish()
     }
 
+    /** Return the captured value (here an OAuth token from the redirect fragment) to the caller. */
+    private fun succeedWithValue(value: String) {
+        setResult(Activity.RESULT_OK, Intent().putExtra(EXTRA_RESULT_COOKIES, value))
+        finish()
+    }
+
     companion object {
         private const val EXTRA_LOGIN_URL = "login_url"
         private const val EXTRA_COOKIE_URL = "cookie_url"
         private const val EXTRA_SUCCESS_COOKIE = "success_cookie"
         private const val EXTRA_LOGOUT_URL = "logout_url"
         private const val EXTRA_AUTO_CAPTURE = "auto_capture"
+        private const val EXTRA_TOKEN_REDIRECT = "token_redirect"
+        private const val EXTRA_TOKEN_FRAGMENT_KEY = "token_fragment_key"
         const val EXTRA_RESULT_COOKIES = "result_cookies"
 
         /** True when [cookieHeader] holds a cookie whose name starts with [name]. */
         private fun hasCookie(cookieHeader: String?, name: String): Boolean =
             name.isNotEmpty() &&
                 cookieHeader?.split(';')?.any { it.substringBefore('=').trim().startsWith(name) } == true
+
+        /** Extract a key's value from a URL's `#fragment` (e.g. access_token from an OAuth redirect). */
+        private fun tokenFromFragment(url: String, key: String): String? {
+            val fragment = url.substringAfter('#', "")
+            if (fragment.isEmpty()) return null
+            return fragment.split('&').firstNotNullOfOrNull { part ->
+                val eq = part.indexOf('=')
+                if (eq <= 0 || part.substring(0, eq) != key) {
+                    null
+                } else {
+                    runCatching { java.net.URLDecoder.decode(part.substring(eq + 1), "UTF-8") }.getOrNull()
+                        ?.takeIf { it.isNotBlank() }
+                }
+            }
+        }
 
         fun intent(
             context: Context,
@@ -143,6 +182,8 @@ class WebLoginActivity : ComponentActivity() {
             successCookie: String,
             logoutUrl: String? = null,
             autoCapture: Boolean = true,
+            tokenRedirectPrefix: String? = null,
+            tokenFragmentKey: String? = null,
         ): Intent =
             Intent(context, WebLoginActivity::class.java)
                 .putExtra(EXTRA_LOGIN_URL, loginUrl)
@@ -150,5 +191,7 @@ class WebLoginActivity : ComponentActivity() {
                 .putExtra(EXTRA_SUCCESS_COOKIE, successCookie)
                 .putExtra(EXTRA_LOGOUT_URL, logoutUrl)
                 .putExtra(EXTRA_AUTO_CAPTURE, autoCapture)
+                .putExtra(EXTRA_TOKEN_REDIRECT, tokenRedirectPrefix)
+                .putExtra(EXTRA_TOKEN_FRAGMENT_KEY, tokenFragmentKey)
     }
 }
