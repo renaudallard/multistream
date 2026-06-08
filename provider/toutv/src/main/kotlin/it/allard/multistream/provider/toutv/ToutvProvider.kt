@@ -2,17 +2,23 @@ package it.allard.multistream.provider.toutv
 
 import android.content.Context
 import android.content.Intent
+import android.util.Log
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
+import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.ProviderTitleDetails
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.Launcher
 import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
+import it.allard.multistream.provider.api.WebLoginSpec
 import it.allard.multistream.provider.api.runCatchingExceptCancellation
+import java.net.URLEncoder
+import java.util.UUID
 
 /**
  * ICI Tou.tv, Radio-Canada's French streaming service (Quebec). Search and detail use the public
@@ -29,17 +35,59 @@ class ToutvProvider(
     override val capabilities = ProviderCapabilities(
         canSearch = true,
         canGetDetails = true,
+        canListEpisodes = true,
+        canFetchWatchState = true,
         canDeepLinkToTitle = true,
         requiresAuth = false,
+        optionalLogin = true,
     )
 
     override fun supportedRegions(): Set<Region> = setOf(Region("CA"))
+
+    /**
+     * Optional Radio-Canada sign-in (Azure AD B2C, OIDC implicit flow). The access token comes back in
+     * the redirect URL fragment, so the WebView login captures `access_token` from `auth-changed#...`
+     * rather than a cookie. The token unlocks the member's account endpoints (watch progress); search
+     * and detail stay anonymous.
+     */
+    override fun webLoginSpec(): WebLoginSpec {
+        val scope = (listOf("openid", "offline_access") + RESOURCE_SCOPES.map { "$RESOURCE/$it" }).joinToString(" ")
+        val authorize = "https://login.cbc.radio-canada.ca/$TENANT/B2C_1A_SSO_Login/oauth2/v2.0/authorize" +
+            "?client_id=$CLIENT_ID" +
+            "&redirect_uri=${enc(REDIRECT_URI)}" +
+            "&response_type=${enc("id_token token")}" +
+            "&response_mode=fragment" +
+            "&scope=${enc(scope)}" +
+            "&nonce=${UUID.randomUUID()}&state=${UUID.randomUUID()}&prompt=login&ui_locales=fr"
+        return WebLoginSpec(
+            loginUrl = authorize,
+            cookieUrl = "https://ici.tou.tv",
+            successCookie = "",
+            autoCapture = false,
+            tokenRedirectPrefix = REDIRECT_URI,
+            tokenFragmentKey = "access_token",
+        )
+    }
+
+    override suspend fun loginWithCookies(cookies: String): ProviderSecrets {
+        // The captured value is the B2C access token (a JWT), not a cookie header.
+        Log.i("ToutvLogin", "captured token len=${cookies.length} jwt=${cookies.startsWith("ey")}")
+        return ProviderSecrets(token = cookies)
+    }
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
         runCatchingExceptCancellation { api.search(query) }.getOrDefault(emptyList())
 
     override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? =
         runCatchingExceptCancellation { api.getDetails(ref.providerTitleId, ref) }.getOrNull()
+
+    override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> =
+        runCatchingExceptCancellation { api.getSeasons(ref.providerTitleId) }.getOrDefault(emptyList())
+
+    override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> {
+        val token = config.secrets.token ?: return emptyList()
+        return runCatchingExceptCancellation { api.fetchWatchedEpisodes(ref.providerTitleId, token) }.getOrDefault(emptyList())
+    }
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
         val url = ref.deepLinkHint ?: "https://ici.tou.tv/${ref.providerTitleId}"
@@ -48,4 +96,19 @@ class ToutvProvider(
 
     override fun launchAppFallback(context: Context, query: String?): Intent? =
         Launcher.launchApp(context, packageName)
+
+    private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
+
+    private companion object {
+        // ICI Tou.tv's Azure AD B2C tenant/policy/client (the values the ici.tou.tv web app uses).
+        const val TENANT = "bef1b538-1950-4283-9b27-b096cbc18070"
+        const val CLIENT_ID = "ebe6e7b0-3cc3-463d-9389-083c7b24399c"
+        const val REDIRECT_URI = "https://ici.tou.tv/auth-changed"
+        const val RESOURCE = "https://rcmnb2cprod.onmicrosoft.com/84593b65-0ef6-4a72-891c-d351ddd50aab"
+        val RESOURCE_SCOPES = listOf(
+            "oidc4ropc", "profile", "email", "id.write", "media-validation", "media-drmt",
+            "toutv-presentation", "toutv-profiling", "subscriptions.write", "subscriptions.validate",
+            "id.account.info", "toutv",
+        )
+    }
 }

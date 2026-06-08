@@ -1,5 +1,6 @@
 package it.allard.multistream.provider.toutv
 
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
@@ -20,7 +21,8 @@ class ToutvApiTest {
     @Before fun setUp() {
         server = MockWebServer()
         server.start()
-        api = ToutvApi(client = buildClient(), baseUrl = server.url("").toString().removeSuffix("/"))
+        val base = server.url("").toString().removeSuffix("/")
+        api = ToutvApi(client = buildClient(), baseUrl = base, profilingUrl = base)
     }
 
     @After fun tearDown() = server.shutdown()
@@ -73,5 +75,54 @@ class ToutvApiTest {
         assertEquals("Un homme revient a Quebec.", details?.synopsis) // top-level description wins
         assertEquals(listOf("Lothaire Bluteau", "Patrick Goyette"), details?.cast)
         assertTrue(server.takeRequest().path!!.contains("/v2/toutv/show/le-confessionnal"))
+    }
+
+    @Test fun getSeasons_groupsLineupItemsBySeason() = runBlocking {
+        server.enqueue(
+            json(
+                """
+                {"content":[
+                  {"title":"Épisodes","lineups":[
+                    {"seasonNumber":1,"title":"Saison 1","items":[
+                      {"episodeNumber":2,"title":"Deux","description":"d2","url":"show/s01e02","completionTime":1800000},
+                      {"episodeNumber":1,"title":"Un","url":"show/s01e01","completionTime":3600000}
+                    ]},
+                    {"seasonNumber":2,"title":"Saison 2","items":[
+                      {"episodeNumber":1,"title":"Retour","url":"show/s02e01"}
+                    ]}
+                  ]},
+                  {"title":"Compléments","lineups":[{"seasonNumber":2,"items":[{"title":"Bonus","url":"show/extra"}]}]}
+                ]}
+                """.trimIndent(),
+            ),
+        )
+        val seasons = api.getSeasons("show")
+        assertEquals(listOf(1, 2), seasons.map { it.seasonNumber })
+        assertEquals(listOf(1, 2), seasons[0].episodes.map { it.episodeNumber }) // ordered within the season
+        assertEquals("Un", seasons[0].episodes[0].title)
+        assertEquals(60, seasons[0].episodes[0].runtimeMin) // 3600000ms -> 60 min
+        assertEquals(1, seasons[1].episodes.size) // the "Compléments" bonus (no episodeNumber) is dropped
+        assertTrue(server.takeRequest().path!!.contains("/v2/toutv/show/show"))
+    }
+
+    @Test fun fetchWatchedEpisodes_marksSeasonUpToTheResumePoint() = runBlocking {
+        // myview gives the one in-progress episode per show; the resume episode is unfinished, so the
+        // episodes before it in that season are the watched ones.
+        server.enqueue(
+            json(
+                """
+                {"title":"Mes visionnements","items":[
+                  {"title":"Autre","url":"autre/s02e05?lectureauto=1","completionStatus":{"completed":true}},
+                  {"title":"Les Chefs!","url":"les-chefs/s14e08?lectureauto=1","completionStatus":{"completed":false,"seekTimePercentage":3}}
+                ]}
+                """.trimIndent(),
+            ),
+        )
+        val watched = api.fetchWatchedEpisodes("les-chefs", "TOKEN")
+        // S14 E1..E7 are watched (E8 is the in-progress resume episode).
+        assertEquals((1..7).map { EpisodeCoord(14, it) }, watched)
+        val request = server.takeRequest()
+        assertTrue(request.path!!.contains("/v2/toutv/myview"))
+        assertEquals("Bearer TOKEN", request.getHeader("Authorization"))
     }
 }

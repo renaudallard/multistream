@@ -1,8 +1,10 @@
 package it.allard.multistream.provider.toutv
 
+import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderTitleDetails
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.await
@@ -27,6 +29,7 @@ class ToutvApiException(message: String) : Exception(message)
 class ToutvApi(
     private val client: OkHttpClient = buildClient(),
     private val baseUrl: String = "https://services.radio-canada.ca/ott/catalog",
+    private val profilingUrl: String = "https://services.radio-canada.ca/ott/profiling",
 ) {
     suspend fun search(query: String): List<UnifiedSearchResult> {
         val url = "$baseUrl/v2/toutv/search?term=${URLEncoder.encode(query, "UTF-8")}&device=web"
@@ -51,6 +54,40 @@ class ToutvApi(
 
     suspend fun getDetails(slug: String, ref: ProviderRef): ProviderTitleDetails? =
         ToutvParser.parseDetails(getObject("$baseUrl/v2/toutv/show/$slug?device=web"), ref)
+
+    /** Seasons and episodes of a show, from the (anonymous) detail response. */
+    suspend fun getSeasons(slug: String): List<Season> =
+        ToutvParser.parseSeasons(getObject("$baseUrl/v2/toutv/show/$slug?device=web"))
+
+    /**
+     * Episodes the signed-in member has watched. Radio-Canada exposes no full watched history and no
+     * inline per-episode flag, only a "continue watching" (myview) resume point per show, so this marks
+     * the episodes of the resume season up to that point (and the resume episode itself when finished).
+     */
+    suspend fun fetchWatchedEpisodes(slug: String, token: String): List<EpisodeCoord> {
+        val myview = getAuthedObject("$profilingUrl/v2/toutv/myview?device=web", token) ?: return emptyList()
+        val resume = ToutvParser.parseResume(myview, slug) ?: return emptyList()
+        val lastWatched = if (resume.completed) resume.episode else resume.episode - 1
+        return (1..lastWatched).map { EpisodeCoord(resume.season, it) }
+    }
+
+    /** GET a member endpoint with the Bearer token; null on a non-2xx or transport/parse error. */
+    private suspend fun getAuthedObject(url: String, token: String): JsonObject? {
+        val request = Request.Builder()
+            .url(url)
+            .header("Accept", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .header("Origin", "https://ici.tou.tv")
+            .header("Authorization", "Bearer $token")
+            .get()
+            .build()
+        return runCatching {
+            client.await(request).use { response ->
+                if (!response.isSuccessful) null
+                else NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
+            }
+        }.getOrNull()
+    }
 
     private suspend fun getObject(url: String): JsonObject {
         val request = Request.Builder()

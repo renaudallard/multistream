@@ -67,7 +67,7 @@ shell for phone and Android TV.
 | **RTBF Auvio** | ✅ | title page | — | optional | free public API |
 | **RTL Play** | ✅ | title page | cast, summary | — | catalog search and details via DPG Media's lfvp API (anonymous, but Belgium-only); needs a Belgian connection |
 | **Play RTS** | ✅ | video page | — | optional | free SRG SSR Integration Layer; video results only |
-| **ICI Tou.tv** | ✅ | title page | cast, summary | — | Radio-Canada's public catalog API (anonymous, worldwide); only playback is Canada-locked |
+| **ICI Tou.tv** | ✅ | title page | cast, summary | optional | Radio-Canada's public catalog API (anonymous, worldwide); lists episodes; only playback is Canada-locked |
 
 `✅ Search` = a real catalog query from this app. `\*` marks a one-time WebView login. Search requires
 that login for Netflix and Prime Video, and the email/password login for Disney+, Molotov and Zattoo;
@@ -89,7 +89,9 @@ Where a service exposes it, the detail screen also offers "Sync watched from <se
 imports which episodes you have already watched there into your local history. This is verified for
 Netflix, Plex, Prime Video and Disney+. Prime reads each episode's playback progress across every
 season; Disney+ collects every episode's id and batches them through its userState lookup, since its
-catalog carries no inline progress.
+catalog carries no inline progress. ICI Tou.tv (after the optional login) is limited by Radio-Canada's
+API, which exposes only a continue-watching resume point per show, so it marks the current season up
+to where you left off rather than a full history.
 
 ## Login
 
@@ -110,9 +112,10 @@ Login is per-provider and never required for search except where noted above.
 - **Play RTS** searches without login (its SRG SSR Integration Layer catalog is public); an
   **optional** WebView login captures your rts.ch account session and passes it to the search
   best-effort.
-- **ICI Tou.tv** has no login: Radio-Canada's catalog and detail endpoints are anonymous and answer
-  worldwide. Only playback is geo-locked to Canada (and behind a Radio-Canada account), which stays
-  inside the official app.
+- **ICI Tou.tv** searches without login (the catalog and detail endpoints are anonymous and answer
+  worldwide). The **optional** login is Radio-Canada's account sign-in (Azure AD B2C) in a WebView; it
+  captures the access token and unlocks importing your watch progress. Only playback is geo-locked to
+  Canada, which stays inside the official app.
 
 Secrets live in `EncryptedSharedPreferences`; clearing the app data or logging out wipes them.
 
