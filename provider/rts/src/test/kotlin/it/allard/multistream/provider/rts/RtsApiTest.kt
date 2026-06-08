@@ -23,27 +23,29 @@ class RtsApiTest {
 
     @After fun tearDown() = server.shutdown()
 
-    @Test fun search_keepsVideosAndBuildsDeepLink() = runBlocking {
+    @Test fun search_keepsVideos_typesEpisodesAsSeriesAndFilmsAsMovies() = runBlocking {
         server.enqueue(
             MockResponse().setHeader("Content-Type", "application/json").setBody(
                 """
-                {"total":2,"searchResultMediaList":[
-                  {"urn":"urn:rts:video:15283680","mediaType":"VIDEO","title":"Le 19h30","imageUrl":"https://img.rts.ch/x.jpg"},
+                {"total":3,"searchResultMediaList":[
+                  {"urn":"urn:rts:video:15283680","mediaType":"VIDEO","type":"EPISODE","title":"Violences domestiques","show":{"title":"Temps présent"},"imageUrl":"https://img.rts.ch/x.jpg"},
+                  {"urn":"urn:rts:video:42","mediaType":"VIDEO","type":"EPISODE","title":"Mourir peut attendre","show":{"title":"Film de minuit"}},
                   {"urn":"urn:rts:audio:abc","mediaType":"AUDIO","title":"Une radio","imageUrl":"https://img.rts.ch/a.jpg"}
                 ]}
                 """.trimIndent(),
             ),
         )
         val results = api.search("19h30")
-        assertEquals(1, results.size)
-        val video = results.first()
-        assertEquals("Le 19h30", video.title)
-        assertEquals(MediaType.MOVIE, video.type)
-        assertEquals("https://www.rts.ch/play/tv/redirect/detail/15283680", video.ref.deepLinkHint)
+        assertEquals(2, results.size) // the AUDIO item is skipped
+        val episode = results.first { it.title == "Violences domestiques" }
+        assertEquals(MediaType.SERIES, episode.type) // episode of a real show => series
+        assertEquals("https://www.rts.ch/play/tv/redirect/detail/15283680", episode.ref.deepLinkHint)
         assertEquals(
             "https://il.srgssr.ch/images/?imageUrl=https%3A%2F%2Fimg.rts.ch%2Fx.jpg&format=jpg&width=480",
-            video.posterUrl,
+            episode.posterUrl,
         )
+        // A film sits under a "Film"/"Cinéma" collection show => movie.
+        assertEquals(MediaType.MOVIE, results.first { it.title == "Mourir peut attendre" }.type)
         val request = server.takeRequest()
         assertTrue(request.path!!.contains("searchResultMediaList?q=19h30"))
         assertTrue(request.path!!.contains("mediaType=VIDEO"))
