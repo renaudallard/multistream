@@ -84,6 +84,7 @@ dependencies {
     implementation(project(":provider:rtbf"))
     implementation(project(":provider:rtl"))
     implementation(project(":provider:rts"))
+    implementation(project(":provider:toutv"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

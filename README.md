@@ -21,8 +21,8 @@
 Search across the services from one box, see show information, **launch directly** into the right
 app at the right title, and track **locally** what you have watched and where you are in a series.
 
-The ten services: **Netflix**, **Disney+**, **Prime Video**, **Molotov**, **Zattoo**, **Arte**,
-**Plex**, **RTBF Auvio**, **RTL Play**, **Play RTS**.
+The eleven services: **Netflix**, **Disney+**, **Prime Video**, **Molotov**, **Zattoo**, **Arte**,
+**Plex**, **RTBF Auvio**, **RTL Play**, **Play RTS**, **ICI Tou.tv**.
 
 ## Contents
 
@@ -51,7 +51,7 @@ results, so a service carrying the full run completes one that holds only part o
 
 ## Services and capabilities
 
-The spine works for **all ten**: deep-link launch, local watch tracking (watched/unwatched,
+The spine works for **all eleven**: deep-link launch, local watch tracking (watched/unwatched,
 series next-episode, watchlist, continue-watching), a per-provider region setting, and one adaptive
 shell for phone and Android TV.
 
@@ -67,14 +67,15 @@ shell for phone and Android TV.
 | **RTBF Auvio** | ✅ | title page | — | optional | free public API |
 | **RTL Play** | ✅ | title page | cast, summary | — | catalog search and details via DPG Media's lfvp API (anonymous, but Belgium-only); needs a Belgian connection |
 | **Play RTS** | ✅ | video page | — | optional | free SRG SSR Integration Layer; video results only |
+| **ICI Tou.tv** | ✅ | title page | cast, summary | — | Radio-Canada's public catalog API (anonymous, worldwide); only playback is Canada-locked |
 
 `✅ Search` = a real catalog query from this app. `\*` marks a one-time WebView login. Search requires
 that login for Netflix and Prime Video, and the email/password login for Disney+, Molotov and Zattoo;
-Arte, Plex, RTBF Auvio, RTL Play and Play RTS search without a login. `Details` = what the title screen adds when you
+Arte, Plex, RTBF Auvio, RTL Play, Play RTS and ICI Tou.tv search without a login. `Details` = what the title screen adds when you
 open a result: a plot summary, and the billed cast where the service exposes it (a release year
 shows wherever search returns one); `—` providers show the poster, title and year only.
 
-Live search is verified on a real device across all ten services. A small built-in sample catalog
+Live search is verified on a real device across all eleven services. A small built-in sample catalog
 also ships for an offline demo; live search itself runs only on a device with network.
 
 ## Episodes and watched state
@@ -109,6 +110,9 @@ Login is per-provider and never required for search except where noted above.
 - **Play RTS** searches without login (its SRG SSR Integration Layer catalog is public); an
   **optional** WebView login captures your rts.ch account session and passes it to the search
   best-effort.
+- **ICI Tou.tv** has no login: Radio-Canada's catalog and detail endpoints are anonymous and answer
+  worldwide. Only playback is geo-locked to Canada (and behind a Radio-Canada account), which stays
+  inside the official app.
 
 Secrets live in `EncryptedSharedPreferences`; clearing the app data or logging out wipes them.
 
@@ -132,6 +136,7 @@ the **title page** and the user presses play inside the official app.
 - **RTL Play** `https://www.rtlplay.be/rtlplay/<slug>~<detailId>` opens the title; the in-app search
   row opens `https://www.rtlplay.be/rtlplay/recherche?q=<query>`.
 - **Play RTS** `https://www.rts.ch/play/tv/redirect/detail/<id>` (the numeric id from the media URN).
+- **ICI Tou.tv** `https://ici.tou.tv/<slug>` opens the show page in the Tou.tv app (package `tv.tou.android`).
 
 ## Modules
 
@@ -143,7 +148,7 @@ core/data            Room (watch tracking), DataStore settings, encrypted secret
 core/net             shared OkHttp client, tolerant JSON helpers, in-memory cookie jar
 provider/api         StreamingProvider interface, ProviderCapabilities, Launcher, DeepLinks, WebLoginSpec
 provider/<service>   one leaf module per service:
-                     netflix · disney · prime · molotov · zattoo · arte · plex · rtbf · rtl · rts
+                     netflix · disney · prime · molotov · zattoo · arte · plex · rtbf · rtl · rts · toutv
 ```
 
 `core/*` and the feature screens never depend on a concrete provider; only `app` wires them, so a
@@ -198,7 +203,7 @@ JVM unit tests (run anywhere):
   and the next-episode computation.
 - `provider/api` covers the deep-link URL formats (`DeepLinks`).
 - Each searchable provider (`netflix`, `disney`, `prime`, `molotov`, `zattoo`, `arte`, `plex`,
-  `rtbf`, `rts`, `rtl`) replays its API client against OkHttp `MockWebServer` (plain HTTP, no Android runtime).
+  `rtbf`, `rts`, `rtl`, `toutv`) replays its API client against OkHttp `MockWebServer` (plain HTTP, no Android runtime).
 
 Room DAO SQL is validated at compile time by the Room KSP processor.
 

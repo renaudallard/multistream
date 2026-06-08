@@ -20,6 +20,7 @@
         <package android:name="be.rtbf.auvio" />
         <package android:name="com.tapptic.rtl.tvi" />
         <package android:name="ch.rts.player" />
+        <package android:name="tv.tou.android" />
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="https" />
