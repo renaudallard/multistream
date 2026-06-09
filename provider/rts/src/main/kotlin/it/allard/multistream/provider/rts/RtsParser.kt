@@ -13,7 +13,8 @@ import kotlinx.serialization.json.JsonObject
 import java.net.URLEncoder
 
 /**
- * Parse an SRG Integration Layer `searchResultMediaList`. Each media carries a `urn`
+ * Parse an SRG Integration Layer media list. Search returns it under `searchResultMediaList` and a
+ * topic (genre) browse under `mediaList`; the per-media shape is identical. Each media carries a `urn`
  * (urn:rts:video:<id>), a title, an imageUrl, a `type` (EPISODE/CLIP/MOVIE/...) and a parent `show`.
  * Only VIDEO items are kept; the numeric id from the urn yields the Play RTS deep link
  * `www.rts.ch/play/tv/redirect/detail/<id>`. RTS returns episodes/clips of shows, and films are
@@ -26,7 +27,7 @@ object RtsParser {
     private val FILM_SHOW = Regex("\\b(films?|cinema|cinéma)\\b", RegexOption.IGNORE_CASE)
 
     fun parse(root: JsonObject): List<UnifiedSearchResult> {
-        val list = root["searchResultMediaList"].array() ?: return emptyList()
+        val list = root["searchResultMediaList"].array() ?: root["mediaList"].array() ?: return emptyList()
         val out = LinkedHashMap<String, UnifiedSearchResult>()
         for (item in list) {
             val o = item.obj() ?: continue

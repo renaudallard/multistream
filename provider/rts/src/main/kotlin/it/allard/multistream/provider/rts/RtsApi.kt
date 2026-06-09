@@ -24,6 +24,20 @@ class RtsApi(
     suspend fun search(query: String, cookie: String? = null): List<UnifiedSearchResult> {
         val url = "$baseUrl/$businessUnit/searchResultMediaList" +
             "?q=${URLEncoder.encode(query, "UTF-8")}&pageSize=30&mediaType=VIDEO"
+        return get(url, cookie)
+    }
+
+    /**
+     * Browse the latest videos of a topic (genre). The byTopicUrn endpoint is not business-unit scoped
+     * (an `/rts/` prefix returns 404), and the topic urn is the full urn:rts:topic:tv:<id> from
+     * `topicList`. The response carries the same media shape as search, under `mediaList`.
+     */
+    suspend fun browseByTopic(topicUrn: String): List<UnifiedSearchResult> {
+        val url = "$baseUrl/mediaList/latest/byTopicUrn/${URLEncoder.encode(topicUrn, "UTF-8")}?pageSize=30"
+        return get(url)
+    }
+
+    private suspend fun get(url: String, cookie: String? = null): List<UnifiedSearchResult> {
         val builder = Request.Builder()
             .url(url)
             .header("Accept", "application/json")

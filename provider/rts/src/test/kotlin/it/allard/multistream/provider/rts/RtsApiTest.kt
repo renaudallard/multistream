@@ -50,4 +50,25 @@ class RtsApiTest {
         assertTrue(request.path!!.contains("searchResultMediaList?q=19h30"))
         assertTrue(request.path!!.contains("mediaType=VIDEO"))
     }
+
+    @Test fun browseByTopic_readsMediaListAndHitsByTopicUrnPath() = runBlocking {
+        // The topic-browse endpoint returns the same media shape under `mediaList` (not search's
+        // `searchResultMediaList`), and is not business-unit scoped.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"mediaList":[
+                  {"urn":"urn:rts:video:99","mediaType":"VIDEO","type":"EPISODE","title":"Yann Lambiel","show":{"title":"Humour"}},
+                  {"urn":"urn:rts:audio:zz","mediaType":"AUDIO","title":"Une radio"}
+                ]}
+                """.trimIndent(),
+            ),
+        )
+        val results = api.browseByTopic("urn:rts:topic:tv:73840")
+        assertEquals(1, results.size) // the AUDIO item is skipped, the VIDEO mediaList item is kept
+        assertEquals("Yann Lambiel", results[0].title)
+        val request = server.takeRequest()
+        assertTrue(request.path!!.contains("/mediaList/latest/byTopicUrn/"))
+        assertTrue(request.path!!.contains("urn%3Arts%3Atopic%3Atv%3A73840"))
+    }
 }
