@@ -3,6 +3,7 @@ package it.allard.multistream.provider.molotov
 import android.content.Context
 import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
@@ -29,6 +30,7 @@ class MolotovProvider(
     override val packageName = "tv.molotov.app"
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canBrowseByGenre = true,
         canDeepLinkToTitle = true,
         isLiveTv = true,
         requiresRegion = true,
@@ -36,6 +38,24 @@ class MolotovProvider(
     )
 
     override fun supportedRegions(): Set<Region> = setOf(Region.FR)
+
+    override fun browsableGenres(): Set<Genre> = GENRE_KINDS.keys
+
+    override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        val kind = GENRE_KINDS[genre] ?: return emptyList()
+        val token = accessToken ?: return emptyList()
+        return try {
+            api.browseByKind(kind, token, region)
+        } catch (e: MolotovApiException) {
+            if (e.authError) retryBrowseAfterAuth(kind, region, config) else emptyList()
+        }
+    }
+
+    private suspend fun retryBrowseAfterAuth(kind: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        val fresh = refreshSession(config, accessToken) ?: return emptyList()
+        return runCatchingExceptCancellation { api.browseByKind(kind, fresh, region) }.getOrDefault(emptyList())
+    }
 
     @Volatile
     private var accessToken: String? = null
@@ -106,4 +126,20 @@ class MolotovProvider(
 
     override fun launchAppFallback(context: Context, query: String?): Intent? =
         Launcher.launchApp(context, packageName)
+
+    private companion object {
+        // Canonical genre -> Molotov "kind" section of the Films category (id 1). Molotov has no
+        // documentary film kind, so DOCUMENTARY is omitted.
+        val GENRE_KINDS = mapOf(
+            Genre.COMEDY to "kind_movies_1",
+            Genre.DRAMA to "kind_movies_23",
+            Genre.HORROR to "kind_movies_29",
+            Genre.ACTION to "kind_movies_27",
+            Genre.SCIFI to "kind_movies_31",
+            Genre.CRIME to "kind_movies_16",
+            Genre.ROMANCE to "kind_movies_116",
+            Genre.ANIMATION to "kind_movies_28",
+            Genre.KIDS to "kind_movies_142",
+        )
+    }
 }

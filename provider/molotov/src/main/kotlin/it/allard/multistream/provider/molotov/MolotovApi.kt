@@ -52,6 +52,16 @@ class MolotovApi(
         return MolotovParser.parse(root, region)
     }
 
+    /**
+     * Browse a movie genre. Molotov exposes each genre as a "kind" section of its Films category (id 1);
+     * the section has its own paginated endpoint, so one genre is fetched directly without pulling the
+     * whole category. The response is the standard section/tile shape the parser already walks.
+     */
+    suspend fun browseByKind(kindSlug: String, accessToken: String, region: Region): List<UnifiedSearchResult> {
+        val root = execElement(get("v2/categories/1/sections/$kindSlug?limit=$BROWSE_LIMIT", token = accessToken))
+        return MolotovParser.parse(root, region)
+    }
+
     private fun tokensFrom(root: JsonObject): MolotovTokens? {
         val auth = root["auth"].obj() ?: root
         val access = auth["access_token"].string() ?: return null
@@ -93,6 +103,7 @@ class MolotovApi(
         execElement(request).obj() ?: throw MolotovApiException("Expected a JSON object response")
 
     private companion object {
+        const val BROWSE_LIMIT = 30
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
 
         // Identity header from the working HA integration (proven against the live API).

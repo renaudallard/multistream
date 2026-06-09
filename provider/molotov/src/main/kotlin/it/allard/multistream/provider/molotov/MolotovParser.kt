@@ -19,7 +19,9 @@ import kotlinx.serialization.json.JsonPrimitive
  */
 object MolotovParser {
     private val CONTENT_TYPES = setOf("program", "vod", "episode", "season", "channel")
-    private val CONTAINER_KEYS = listOf("sections", "items", "results", "catalog")
+    // A single-genre browse nests its tiles under `section` (singular); search and category pages use
+    // `sections`/`items`/`results`/`catalog`.
+    private val CONTAINER_KEYS = listOf("sections", "section", "items", "results", "catalog")
 
     // A "program" tile covers both films and series; its metadata category tells them apart. Molotov's
     // Films category is id 1 (verified against the live API), so a program in that category is a movie.

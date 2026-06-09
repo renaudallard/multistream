@@ -107,4 +107,24 @@ class MolotovApiTest {
             assertTrue(e.authError)
         }
     }
+
+    @Test fun browseByKind_fetchesGenreSectionAndParsesPrograms() = runBlocking {
+        // The per-genre endpoint nests its tiles under `section` (singular), not `sections`/`items`.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"page":{},"section":{"slug":"kind_movies_1","items":[
+                  {"type":"program","id":"343524","slug":"comme-chien-et-chat","title":"Comme chien et chat","metadata":{"program_category_id":"1"}},
+                  {"type":"program","id":"6133831","slug":"le-jour","title":"Le Jour de la Colère","metadata":{"program_category_id":"1"}}
+                ]},"sidebar":{}}
+                """.trimIndent(),
+            ),
+        )
+        val results = api.browseByKind("kind_movies_1", "AT", Region.FR)
+        assertEquals(2, results.size)
+        val film = results.first { it.title == "Comme chien et chat" }
+        assertEquals(MediaType.MOVIE, film.type) // a program in the Films category is a movie
+        assertEquals("https://www.molotov.tv/comme-chien-et-chat", film.ref.deepLinkHint)
+        assertTrue(server.takeRequest().path!!.contains("/v2/categories/1/sections/kind_movies_1"))
+    }
 }
