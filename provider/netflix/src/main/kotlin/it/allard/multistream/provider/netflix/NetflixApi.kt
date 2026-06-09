@@ -60,6 +60,11 @@ class NetflixApi(
         return withRefresh { doSearch(query, region) }
     }
 
+    suspend fun browseGenre(genreId: Int, cookies: String, region: Region): List<UnifiedSearchResult> {
+        seed(cookies)
+        return withRefresh { doBrowseGenre(genreId, region) }
+    }
+
     /** Seasons + episodes for a show via the clean /metadata endpoint (no Falcor needed). */
     suspend fun getSeasons(videoId: String, cookies: String): List<Season> {
         seed(cookies)
@@ -123,6 +128,20 @@ class NetflixApi(
             .filter { normQuery.isBlank() || normalizeTitle(it.title).contains(normQuery) }
         // Boxart isn't materialized through the search reference path, so fetch it for the matched ids
         // in a second pathEvaluator call (this is what the reference client does) and attach posters.
+        val posters = orDefault(emptyMap()) { fetchBoxarts(current, matched.map { it.ref.providerTitleId }) }
+        return matched.map { result -> posters[result.ref.providerTitleId]?.let { result.copy(posterUrl = it) } ?: result }
+    }
+
+    private suspend fun doBrowseGenre(genreId: Int, region: Region): List<UnifiedSearchResult> {
+        val current = session ?: prepareSession().also { session = it }
+        // Genre video list: the same index -> video reference shape as search, under genres[id].su.
+        val base = "[\"genres\",$genreId,\"su\""
+        val refPath = "$base,{\"from\":0,\"to\":47},\"reference\",[\"summary\",\"title\"]]"
+        val idPath = "$base,{\"from\":0,\"to\":47},\"reference\",[\"id\",\"name\",\"requestId\"]]"
+        val body = "path=$refPath&path=$idPath&authURL=${current.authUrl}"
+        val jsonGraph = exec(pathEvaluatorRequest(current, body))["jsonGraph"].obj() ?: return emptyList()
+        val matched = NetflixParser.parseGenre(jsonGraph, genreId, region)
+        // Boxart isn't materialized through the reference path, so fetch it for the matched ids.
         val posters = orDefault(emptyMap()) { fetchBoxarts(current, matched.map { it.ref.providerTitleId }) }
         return matched.map { result -> posters[result.ref.providerTitleId]?.let { result.copy(posterUrl = it) } ?: result }
     }

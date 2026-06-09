@@ -3,6 +3,7 @@ package it.allard.multistream.provider.netflix
 import android.content.Context
 import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
@@ -32,6 +33,7 @@ class NetflixProvider(
         canSearch = true,
         canGetDetails = true,
         canListEpisodes = true,
+        canBrowseByGenre = true,
         canFetchWatchState = true,
         canDeepLinkToTitle = true,
         canInAppSearchDeepLink = true,
@@ -40,6 +42,22 @@ class NetflixProvider(
 
     @Volatile
     private var cookies: String? = null
+
+    override fun browsableGenres(): Set<Genre> = NETFLIX_GENRES.keys
+
+    override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        val genreId = NETFLIX_GENRES[genre] ?: return emptyList()
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        val cookie = cookies ?: return emptyList()
+        return try {
+            val results = api.browseGenre(genreId, cookie, region)
+            persistRotated(cookie, config)
+            results
+        } catch (e: NetflixApiException) {
+            if (e.authError) api.invalidate()
+            emptyList()
+        }
+    }
 
     override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> {
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
@@ -128,5 +146,19 @@ class NetflixProvider(
             Launcher.viewIntent(context, DeepLinks.netflixSearch(query), packageName)?.let { return it }
         }
         return Launcher.launchApp(context, packageName)
+    }
+
+    private companion object {
+        // Canonical genre -> Netflix's public genre code (netflix.com/browse/genre/<code>).
+        val NETFLIX_GENRES = mapOf(
+            Genre.COMEDY to 6548,
+            Genre.DRAMA to 5763,
+            Genre.HORROR to 8711,
+            Genre.ACTION to 1365,
+            Genre.DOCUMENTARY to 6839,
+            Genre.SCIFI to 1492,
+            Genre.ROMANCE to 8883,
+            Genre.KIDS to 783,
+        )
     }
 }

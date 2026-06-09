@@ -94,6 +94,49 @@ class NetflixApiTest {
         assertTrue(boxBody.contains("\"boxarts\",[\"_342x684\",\"_665x375\"]"))
     }
 
+    @Test fun browseGenre_extractsTitlesFromGenreVideoList() = runBlocking {
+        val url = server.url("/api/shakti/BUILD")
+        val hostPort = "${url.host}:${url.port}"
+        server.enqueue(
+            MockResponse().setBody(
+                "<script>netflix.reactContext = {\"models\":{\"services\":{\"data\":{\"memberapi\":" +
+                    "{\"protocol\":\"${url.scheme}\",\"hostname\":\"$hostPort\",\"path\":[\"\\x2Fapi\\x2Fshakti\\x2FBUILD\"]}}}," +
+                    "\"userInfo\":{\"data\":{\"authURL\":\"AUTH123\",\"userGuid\":\"GUID42\"}}," +
+                    "\"serverDefs\":{\"data\":{\"BUILD_IDENTIFIER\":\"BUILD\"}}}};</script>",
+            ),
+        )
+        val t = "${'$'}type"
+        // Genre list: genres[id].su -> index -> reference -> videos[id], same shape as search.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                "{\"jsonGraph\":{" +
+                    "\"genres\":{\"6548\":{\"su\":{" +
+                    "\"0\":{\"reference\":{\"$t\":\"ref\",\"value\":[\"videos\",\"111\"]}}," +
+                    "\"1\":{\"reference\":{\"$t\":\"ref\",\"value\":[\"videos\",\"222\"]}}}}}," +
+                    "\"videos\":{" +
+                    "\"111\":{\"title\":{\"$t\":\"atom\",\"value\":\"A Funny Movie\"},\"summary\":{\"$t\":\"atom\",\"value\":{\"type\":\"movie\"}}}," +
+                    "\"222\":{\"title\":{\"$t\":\"atom\",\"value\":\"A Sitcom\"},\"summary\":{\"$t\":\"atom\",\"value\":{\"type\":\"show\"}}}" +
+                    "}}}",
+            ),
+        )
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                "{\"jsonGraph\":{\"videos\":{\"111\":{\"boxarts\":{\"_342x684\":{\"jpg\":{\"$t\":\"atom\",\"value\":{\"url\":\"https://art/111.jpg\"}}}}}}}}",
+            ),
+        )
+        val results = api.browseGenre(6548, "NetflixId=abc; SecureNetflixId=def", Region("US"))
+        assertEquals(2, results.size) // no query filter for browse: both genre titles are kept
+        assertEquals("A Funny Movie", results[0].title)
+        assertEquals(MediaType.MOVIE, results[0].type)
+        assertEquals("https://www.netflix.com/title/111", results[0].ref.deepLinkHint)
+        assertEquals("https://art/111.jpg", results[0].posterUrl)
+        assertEquals(MediaType.SERIES, results.first { it.title == "A Sitcom" }.type)
+        assertTrue(server.takeRequest().path!!.contains("/browse")) // session
+        val post = server.takeRequest()
+        assertTrue(post.path!!.contains("/pathEvaluator"))
+        assertTrue(post.body.readUtf8().contains("\"genres\",6548,\"su\""))
+    }
+
     @Test fun getSeasons_parsesMetadata() = runBlocking {
         val memberApi = server.url("/api/shakti/BUILD").toString().removeSuffix("/")
         server.enqueue(

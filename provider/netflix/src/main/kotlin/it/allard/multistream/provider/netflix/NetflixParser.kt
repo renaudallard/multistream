@@ -41,7 +41,21 @@ object NetflixParser {
             ?.get("titles").obj()?.values?.firstOrNull().obj()
         val listKey = titlesRef?.get("value").array()?.getOrNull(2).string() ?: return emptyList()
         val list = byReference[listKey].obj() ?: return emptyList()
+        return resultsFrom(list, videos, region)
+    }
 
+    /**
+     * Titles of a genre. The genre Falcor path `["genres",<id>,"su",{range},"reference",...]` yields
+     * the same index -> reference -> `["videos",id]` list as search, under `genres[<id>].su`.
+     */
+    fun parseGenre(jsonGraph: JsonObject, genreId: Int, region: Region): List<UnifiedSearchResult> {
+        val videos = jsonGraph["videos"].obj() ?: return emptyList()
+        val list = jsonGraph["genres"].obj()?.get(genreId.toString()).obj()?.get("su").obj() ?: return emptyList()
+        return resultsFrom(list, videos, region)
+    }
+
+    /** Map a Falcor index->video-reference list to results, reading each title/type from `videos`. */
+    private fun resultsFrom(list: JsonObject, videos: JsonObject, region: Region): List<UnifiedSearchResult> {
         val out = mutableListOf<UnifiedSearchResult>()
         for ((indexKey, entry) in list.entries.sortedBy { it.key.toIntOrNull() ?: Int.MAX_VALUE }) {
             if (indexKey.toIntOrNull() == null) continue
