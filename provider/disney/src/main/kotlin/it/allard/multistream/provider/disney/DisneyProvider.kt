@@ -3,6 +3,7 @@ package it.allard.multistream.provider.disney
 import android.content.Context
 import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
@@ -34,6 +35,7 @@ class DisneyProvider(
         canSearch = true,
         canGetDetails = true,
         canListEpisodes = true,
+        canBrowseByGenre = true,
         canFetchWatchState = true,
         canDeepLinkToTitle = true,
         requiresAuth = true,
@@ -42,6 +44,16 @@ class DisneyProvider(
     @Volatile
     private var accessToken: String? = null
     private val sessionMutex = Mutex()
+
+    override fun browsableGenres(): Set<Genre> = GENRE_KEYWORDS.keys
+
+    // Disney+ exposes no browseable genre-set page (the explore home page is unsupported), but its search
+    // is genre-aware: querying a genre name returns that genre's titles. Browse maps each canonical genre
+    // to the matching French catalog keyword and reuses the search path and parser.
+    override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        val keyword = GENRE_KEYWORDS[genre] ?: return emptyList()
+        return authedCall(config, emptyList()) { token -> api.search(keyword, token, region) }
+    }
 
     override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> =
         authedCall(config, emptyList()) { token -> api.getSeasons(ref.providerTitleId, token) }
@@ -127,4 +139,21 @@ class DisneyProvider(
 
     override fun launchAppFallback(context: Context, query: String?): Intent? =
         Launcher.launchApp(context, packageName)
+
+    private companion object {
+        // Canonical genre -> French catalog keyword fed to Disney+ search (accent-free, as the catalog
+        // tokenizes it). Kept to the genres Disney+ actually carries.
+        val GENRE_KEYWORDS = mapOf(
+            Genre.COMEDY to "comedie",
+            Genre.DRAMA to "drame",
+            Genre.HORROR to "horreur",
+            Genre.ACTION to "action",
+            Genre.DOCUMENTARY to "documentaire",
+            Genre.SCIFI to "science-fiction",
+            Genre.CRIME to "policier",
+            Genre.ROMANCE to "romance",
+            Genre.ANIMATION to "animation",
+            Genre.KIDS to "jeunesse",
+        )
+    }
 }
