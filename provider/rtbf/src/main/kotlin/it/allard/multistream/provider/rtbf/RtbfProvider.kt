@@ -3,6 +3,7 @@ package it.allard.multistream.provider.rtbf
 import android.content.Context
 import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
@@ -28,12 +29,22 @@ class RtbfProvider(
     override val packageName = "be.rtbf.auvio"
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canBrowseByGenre = true,
         canDeepLinkToTitle = true,
         requiresAuth = false,
         optionalLogin = true,
     )
 
     override fun supportedRegions(): Set<Region> = setOf(Region("BE"))
+
+    override fun browsableGenres(): Set<Genre> = GENRE_CATEGORIES.keys
+
+    // Auvio organizes its catalog into editorial categories, not film genres; only the categories that
+    // map cleanly to a canonical genre are exposed (documentaries and Japanese animation).
+    override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        val category = GENRE_CATEGORIES[genre] ?: return emptyList()
+        return runCatching { api.browseCategory(category) }.getOrDefault(emptyList())
+    }
 
     override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
         loginUrl = "https://auvio.rtbf.be/connexion",
@@ -55,4 +66,13 @@ class RtbfProvider(
 
     override fun launchAppFallback(context: Context, query: String?): Intent? =
         Launcher.launchApp(context, packageName)
+
+    private companion object {
+        // Canonical genre -> Auvio category page id (slug-id from the home page). Auvio has no dedicated
+        // comedy/horror/action/etc. category, so only documentaries and animation are offered.
+        val GENRE_CATEGORIES = mapOf(
+            Genre.DOCUMENTARY to "documentaires-31",
+            Genre.ANIMATION to "animes-231",
+        )
+    }
 }

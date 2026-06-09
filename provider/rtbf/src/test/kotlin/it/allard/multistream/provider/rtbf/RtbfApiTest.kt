@@ -49,4 +49,38 @@ class RtbfApiTest {
         assertEquals(MediaType.MOVIE, results.first { it.title == "Les 24 heures moto" }.type)
         assertTrue(server.takeRequest().path!!.contains("/search?query=doc"))
     }
+
+    @Test fun browseCategory_followsListWidgetContentPathAndParsesItems() = runBlocking {
+        val widgetUrl = server.url("/widgets/19093").toString()
+        // The category page lists widgets; only PROGRAM_LIST/MEDIA_LIST widgets are followed (the BANNER
+        // is skipped), so exactly one widget content call is made after the page.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"data":{"id":"categorie/documentaires-31","widgets":[
+                  {"type":"BANNER","contentPath":"$widgetUrl"},
+                  {"type":"PROGRAM_LIST","title":"Documentaires exclusifs","contentPath":"$widgetUrl"}
+                ]}}
+                """.trimIndent(),
+            ),
+        )
+        // A widget nests its items under data.content (an object), not the search data[] list.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"data":{"content":[
+                  {"id":"31916","title":"Taylor","type":"SERIE","path":"/emission/taylor-31916"},
+                  {"id":"31708","title":"Brad Pitt","type":"STANDALONE","path":"/media/brad-pitt"}
+                ]}}
+                """.trimIndent(),
+            ),
+        )
+        val results = api.browseCategory("documentaires-31")
+        assertEquals(2, results.size)
+        assertEquals(MediaType.SERIES, results.first { it.title == "Taylor" }.type) // SERIE => series
+        assertEquals(MediaType.MOVIE, results.first { it.title == "Brad Pitt" }.type)
+        assertEquals("https://auvio.rtbf.be/emission/taylor-31916", results.first { it.title == "Taylor" }.ref.deepLinkHint)
+        assertTrue(server.takeRequest().path!!.contains("/pages/categorie/documentaires-31"))
+        assertTrue(server.takeRequest().path!!.contains("/widgets/19093"))
+    }
 }
