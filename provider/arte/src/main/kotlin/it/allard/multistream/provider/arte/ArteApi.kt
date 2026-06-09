@@ -5,6 +5,7 @@ import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.await
 import it.allard.multistream.core.net.buildClient
 import it.allard.multistream.core.net.obj
+import kotlinx.serialization.json.JsonObject
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.net.URLEncoder
@@ -21,6 +22,23 @@ class ArteApi(
 ) {
     suspend fun search(query: String, lang: String, cookie: String? = null): List<UnifiedSearchResult> {
         val url = "$baseUrl/$lang/web/pages/SEARCH/?query=${URLEncoder.encode(query, "UTF-8")}"
+        return fetch(url, cookie) { ArteParser.parse(it, lang) }
+    }
+
+    /**
+     * Browse a genre (category) page. The page code (e.g. DOR for documentaries) selects the catalog
+     * section; its programmes are merged from every zone, unlike the single-zone search page.
+     */
+    suspend fun browseGenre(code: String, lang: String, cookie: String? = null): List<UnifiedSearchResult> {
+        val url = "$baseUrl/$lang/web/pages/$code/"
+        return fetch(url, cookie) { ArteParser.parseGenrePage(it, lang) }
+    }
+
+    private suspend fun fetch(
+        url: String,
+        cookie: String?,
+        parse: (JsonObject) -> List<UnifiedSearchResult>,
+    ): List<UnifiedSearchResult> {
         val builder = Request.Builder()
             .url(url)
             .header("Accept", "application/json")
@@ -31,7 +49,7 @@ class ArteApi(
             if (!response.isSuccessful) throw ArteApiException("HTTP ${response.code}")
             val root = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
                 ?: throw ArteApiException("Expected a JSON object response")
-            return ArteParser.parse(root, lang)
+            return parse(root)
         }
     }
 

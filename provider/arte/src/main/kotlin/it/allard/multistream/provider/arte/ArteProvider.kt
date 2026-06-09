@@ -3,6 +3,7 @@ package it.allard.multistream.provider.arte
 import android.content.Context
 import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
@@ -28,6 +29,7 @@ class ArteProvider(
     override val packageName = "tv.arte.plus7"
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canBrowseByGenre = true,
         canDeepLinkToTitle = true,
         requiresRegion = true,
         requiresAuth = false,
@@ -36,6 +38,16 @@ class ArteProvider(
 
     override fun supportedRegions(): Set<Region> =
         setOf(Region("FR"), Region("DE"), Region("EN"), Region("ES"), Region("IT"), Region("PL"))
+
+    override fun browsableGenres(): Set<Genre> = GENRE_CODES.keys
+
+    // Arte's catalog is thematic (Cinema, Series, Documentaires, ...) rather than by film genre, so only
+    // the categories that map cleanly to a canonical genre are exposed. FAM ("a voir en famille") is the
+    // closest fit for KIDS (family viewing rather than a pure children's catalog).
+    override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        val code = GENRE_CODES[genre] ?: return emptyList()
+        return runCatching { api.browseGenre(code, langFor(region), config.secrets.cookie) }.getOrDefault(emptyList())
+    }
 
     override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
         loginUrl = "https://www.arte.tv/fr/profile/auth/login/",
@@ -67,5 +79,14 @@ class ArteProvider(
         "IT" -> "it"
         "PL" -> "pl"
         else -> "fr"
+    }
+
+    private companion object {
+        // Canonical genre -> Arte EMAC page code. Arte has no dedicated comedy/horror/action/etc. page,
+        // so only documentaries and family viewing are offered.
+        val GENRE_CODES = mapOf(
+            Genre.DOCUMENTARY to "DOR",
+            Genre.KIDS to "FAM",
+        )
     }
 }

@@ -45,4 +45,29 @@ class ArteApiTest {
         assertEquals(MediaType.MOVIE, results.first { it.title == "Le Film" }.type)
         assertTrue(server.takeRequest().path!!.contains("/fr/web/pages/SEARCH/?query=doc"))
     }
+
+    @Test fun browseGenre_mergesZonesFiltersExternalTeasersAndDedups() = runBlocking {
+        // A genre page has no "listing" zone; programmes are merged from every zone, items without a
+        // programId (external web-link teasers) are dropped, and duplicates across zones are collapsed.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"zones":[
+                  {"code":"highlights_category_DOR","content":{"data":[
+                    {"programId":"100-A","title":"Doc One","kind":{"isCollection":false}},
+                    {"title":"Newsletter teaser","url":"https://www.arte.tv/fr/x"}
+                  ]}},
+                  {"code":"02_DOR","content":{"data":[
+                    {"programId":"100-A","title":"Doc One","kind":{"isCollection":false}},
+                    {"programId":"RC-200","title":"Doc Series","kind":{"isCollection":true}}
+                  ]}}
+                ]}
+                """.trimIndent(),
+            ),
+        )
+        val results = api.browseGenre("DOR", "fr")
+        assertEquals(listOf("Doc One", "Doc Series"), results.map { it.title })
+        assertEquals(MediaType.SERIES, results.first { it.title == "Doc Series" }.type)
+        assertTrue(server.takeRequest().path!!.contains("/fr/web/pages/DOR/"))
+    }
 }
