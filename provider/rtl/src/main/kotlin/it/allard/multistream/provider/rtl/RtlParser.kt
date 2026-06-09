@@ -13,19 +13,27 @@ import it.allard.multistream.core.net.array
 import it.allard.multistream.core.net.int
 import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import java.text.Normalizer
 
 /**
- * Parse RTL Play lfvp search responses. The body is `results[]` sections (grouped by relevance), each
- * holding `teasers[]` items with a title, a `detailId` (the catalog id) and an absolute image URL.
- * Sections are flattened into one result list; the deep link is `rtlplay.be/rtlplay/<slug>~<detailId>`.
+ * Parse RTL Play lfvp responses. Search groups `teasers[]` items under `results[]` sections, while a
+ * storefront (genre/catalog) page groups the same teasers under `rows[]`; each teaser carries a title,
+ * a `detailId` (the catalog id) and an absolute image URL. Sections are flattened into one result list;
+ * the deep link is `rtlplay.be/rtlplay/<slug>~<detailId>`.
  */
 object RtlParser {
-    fun parse(root: JsonObject, region: Region): List<UnifiedSearchResult> {
-        val sections = root["results"].array() ?: return emptyList()
+    fun parse(root: JsonObject, region: Region): List<UnifiedSearchResult> =
+        teasersFrom(root["results"].array(), region)
+
+    /** Parse a storefront (genre/catalog) page, whose sections live under `rows[]` rather than `results[]`. */
+    fun parseStorefront(root: JsonObject, region: Region): List<UnifiedSearchResult> =
+        teasersFrom(root["rows"].array(), region)
+
+    private fun teasersFrom(sections: JsonArray?, region: Region): List<UnifiedSearchResult> {
         val out = LinkedHashMap<String, UnifiedSearchResult>()
-        for (section in sections) {
+        for (section in sections ?: return emptyList()) {
             val teasers = section.obj()?.get("teasers").array() ?: continue
             for (teaser in teasers) {
                 val o = teaser.obj() ?: continue

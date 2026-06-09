@@ -38,6 +38,21 @@ class RtlApi(
         }
     }
 
+    /** Browse a storefront (genre/catalog) page, e.g. "documentaires"; its rows hold the catalog teasers. */
+    suspend fun browseStorefront(storefrontId: String, region: Region): List<UnifiedSearchResult> {
+        val url = baseUrl.toHttpUrl().newBuilder()
+            .addPathSegment("RTL_PLAY")
+            .addPathSegment("storefronts")
+            .addPathSegment(storefrontId)
+            .build()
+        client.await(get(url.toString())).use { response ->
+            if (!response.isSuccessful) throw RtlApiException("HTTP ${response.code}")
+            val root = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
+                ?: throw RtlApiException("Expected a JSON object response")
+            return RtlParser.parseStorefront(root, region)
+        }
+    }
+
     /** Program synopsis, production year and cast from the detail3 page. */
     suspend fun getDetails(detailId: String, ref: ProviderRef): ProviderTitleDetails? {
         val root = detail3(detailId, null) ?: return null

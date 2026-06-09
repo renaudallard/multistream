@@ -3,6 +3,7 @@ package it.allard.multistream.provider.rtl
 import android.content.Context
 import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderTitleDetails
@@ -30,6 +31,7 @@ class RtlProvider(
     override val packageName = "com.tapptic.rtl.tvi"
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canBrowseByGenre = true,
         canGetDetails = true,
         canListEpisodes = true,
         canDeepLinkToTitle = true,
@@ -41,6 +43,15 @@ class RtlProvider(
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
         runCatchingExceptCancellation { api.search(query, region) }.getOrDefault(emptyList())
+
+    override fun browsableGenres(): Set<Genre> = GENRE_STOREFRONTS.keys
+
+    // RTL Play groups its catalog by storefront (accueil, series, films, ...), which map to content type
+    // rather than film genre; only documentaries correspond to a canonical genre.
+    override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        val storefront = GENRE_STOREFRONTS[genre] ?: return emptyList()
+        return runCatchingExceptCancellation { api.browseStorefront(storefront, region) }.getOrDefault(emptyList())
+    }
 
     override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? =
         runCatchingExceptCancellation { api.getDetails(ref.providerTitleId, ref) }.getOrNull()
@@ -59,5 +70,12 @@ class RtlProvider(
             Launcher.viewIntent(context, url, packageName)?.let { return it }
         }
         return Launcher.launchApp(context, packageName)
+    }
+
+    private companion object {
+        // Canonical genre -> RTL Play storefront id. Only documentaries map to a canonical genre.
+        val GENRE_STOREFRONTS = mapOf(
+            Genre.DOCUMENTARY to "documentaires",
+        )
     }
 }

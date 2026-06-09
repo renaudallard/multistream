@@ -53,6 +53,31 @@ class RtlApiTest {
         assertTrue(server.takeRequest().path!!.contains("/RTL_PLAY/search?query=zodiaque"))
     }
 
+    @Test fun browseStorefront_flattensRowTeasers() = runBlocking {
+        // A storefront groups the same teasers under `rows[]` rather than search's `results[]`.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"title":"Documentaires","rows":[
+                  {"rowType":"GRID","title":"Notre sélection","teasers":[
+                    {"title":"Immersion chez les naturistes","detailId":"abc123","imageUrl":"https://img/imm.webp"}
+                  ]},
+                  {"rowType":"GRID","title":"Exclusifs","teasers":[
+                    {"title":"OVNIs, le mystère belge","detailId":"def456","imageUrl":"https://img/ovni.webp"}
+                  ]}
+                ]}
+                """.trimIndent(),
+            ),
+        )
+        val results = api.browseStorefront("documentaires", Region("BE"))
+        assertEquals(2, results.size)
+        assertEquals(
+            "https://www.rtlplay.be/rtlplay/immersion-chez-les-naturistes~abc123",
+            results.first { it.title == "Immersion chez les naturistes" }.ref.deepLinkHint,
+        )
+        assertTrue(server.takeRequest().path!!.contains("/RTL_PLAY/storefronts/documentaires"))
+    }
+
     @Test fun getDetails_parsesSummaryYearAndCast() = runBlocking {
         server.enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody(DETAIL))
         val d = api.getDetails("75cbca3b", ProviderRef(ProviderId.RTL, "75cbca3b", null))
