@@ -208,4 +208,20 @@ class PrimeApiTest {
             assertTrue(e.authError)
         }
     }
+
+    @Test fun browseGenre_keepsEveryResultAndQueriesKeyword() = runBlocking {
+        // Genre browse must not apply the search title-substring filter: a genre keyword never matches the
+        // titles it returns, so every parsed result is kept (unlike search, which filters by title).
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                "{\"results\":[" +
+                    "{\"title\":\"Mr. Bean\",\"titleID\":\"amzn1.dv.gti.aaa\",\"entityType\":\"TV Show\"}," +
+                    "{\"title\":\"Borat\",\"titleID\":\"amzn1.dv.gti.bbb\",\"entityType\":\"Movie\"}" +
+                    "]}",
+            ),
+        )
+        val results = api.browseGenre("comedy", "at-main=tok", Region("US"))
+        assertEquals(setOf("Mr. Bean", "Borat"), results.map { it.title }.toSet())
+        assertTrue(server.takeRequest().path!!.contains("/gp/video/search?phrase=comedy"))
+    }
 }

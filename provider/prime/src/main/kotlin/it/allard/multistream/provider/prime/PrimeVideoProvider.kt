@@ -3,6 +3,7 @@ package it.allard.multistream.provider.prime
 import android.content.Context
 import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
@@ -32,6 +33,7 @@ class PrimeVideoProvider(
     override val capabilities = ProviderCapabilities(
         canSearch = true,
         canListEpisodes = true,
+        canBrowseByGenre = true,
         canFetchWatchState = true,
         canDeepLinkToTitle = true,
         requiresAuth = true,
@@ -63,6 +65,22 @@ class PrimeVideoProvider(
         val cookie = cookies ?: return emptyList()
         return try {
             api.search(query, cookie, region)
+        } catch (e: PrimeApiException) {
+            if (e.authError) cookies = null
+            emptyList()
+        }
+    }
+
+    override fun browsableGenres(): Set<Genre> = GENRE_KEYWORDS.keys
+
+    // Prime has no genre catalog page; its search is genre-aware, so browse maps each canonical genre to
+    // an English genre keyword (Amazon localizes the results to the member's catalog) and queries search.
+    override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        val keyword = GENRE_KEYWORDS[genre] ?: return emptyList()
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        val cookie = cookies ?: return emptyList()
+        return try {
+            api.browseGenre(keyword, cookie, region)
         } catch (e: PrimeApiException) {
             if (e.authError) cookies = null
             emptyList()
@@ -102,5 +120,20 @@ class PrimeVideoProvider(
 
     private companion object {
         const val MOBILE_PACKAGE = "com.amazon.avod.thirdpartyclient"
+
+        // Canonical genre -> English keyword for Prime's genre-aware search. English terms match across
+        // regions; Amazon returns the member's localized catalog regardless of the keyword language.
+        val GENRE_KEYWORDS = mapOf(
+            Genre.COMEDY to "comedy",
+            Genre.DRAMA to "drama",
+            Genre.HORROR to "horror",
+            Genre.ACTION to "action",
+            Genre.DOCUMENTARY to "documentary",
+            Genre.SCIFI to "science fiction",
+            Genre.CRIME to "crime",
+            Genre.ROMANCE to "romance",
+            Genre.ANIMATION to "animation",
+            Genre.KIDS to "kids",
+        )
     }
 }

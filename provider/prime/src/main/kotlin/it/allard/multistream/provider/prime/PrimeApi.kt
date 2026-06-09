@@ -49,6 +49,28 @@ class PrimeApi(
     }
 
     /**
+     * Genre browse. Prime Video has no genre catalog endpoint, but its search is genre-aware: querying a
+     * genre keyword returns that genre's titles (localized to the member's catalog). Unlike [search] this
+     * keeps every parsed result, since a genre keyword never substring-matches the titles it returns.
+     */
+    suspend fun browseGenre(keyword: String, cookies: String, region: Region): List<UnifiedSearchResult> {
+        val url = "$baseUrl/gp/video/search?phrase=${URLEncoder.encode(keyword, "UTF-8")}"
+        val request = Request.Builder()
+            .url(url)
+            .header("Cookie", cookies)
+            .header("Accept", "application/json")
+            .header("User-Agent", USER_AGENT)
+            .get()
+            .build()
+        client.await(request).use { response ->
+            val html = response.body?.string().orEmpty()
+            if (response.code == 401 || response.code == 403) throw PrimeApiException("Unauthorized", authError = true)
+            if (!response.isSuccessful) throw PrimeApiException("HTTP ${response.code}")
+            return PrimeParser.parse(html, region)
+        }
+    }
+
+    /**
      * Watch state for a signed-in member, across every season. The logged-in detail page reports each
      * episode's playback progress (1.0 once fully watched) for the selected season only, so the
      * selected season is read from the title page and every other season's page is fetched in parallel
