@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
@@ -36,11 +37,19 @@ class ToutvProvider(
         canSearch = true,
         canGetDetails = true,
         canListEpisodes = true,
+        canBrowseByGenre = true,
         canFetchWatchState = true,
         canDeepLinkToTitle = true,
         requiresAuth = false,
         optionalLogin = true,
     )
+
+    override fun browsableGenres(): Set<Genre> = GENRE_SLUGS.keys
+
+    override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        val slug = GENRE_SLUGS[genre] ?: return emptyList()
+        return runCatchingExceptCancellation { api.browseByGenre(slug) }.getOrDefault(emptyList())
+    }
 
     override fun supportedRegions(): Set<Region> = setOf(Region("CA"))
 
@@ -100,6 +109,20 @@ class ToutvProvider(
     private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8").replace("+", "%20")
 
     private companion object {
+        // Canonical genre -> Tou.tv category slug (from the catalog browse `genres[]`; Kids has no
+        // matching genre category and is omitted).
+        val GENRE_SLUGS = mapOf(
+            Genre.COMEDY to "comedie-et-humour",
+            Genre.DRAMA to "drame",
+            Genre.HORROR to "suspense-et-horreur",
+            Genre.ACTION to "action-et-aventure",
+            Genre.DOCUMENTARY to "docu-realite",
+            Genre.SCIFI to "science-fiction-et-fantastique",
+            Genre.CRIME to "crime-et-police",
+            Genre.ROMANCE to "romance",
+            Genre.ANIMATION to "animation",
+        )
+
         // ICI Tou.tv's Azure AD B2C tenant/policy/client (the values the ici.tou.tv web app uses).
         const val TENANT = "bef1b538-1950-4283-9b27-b096cbc18070"
         const val CLIENT_ID = "ebe6e7b0-3cc3-463d-9389-083c7b24399c"

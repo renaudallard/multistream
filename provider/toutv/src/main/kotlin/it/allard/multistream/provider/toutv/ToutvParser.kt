@@ -28,26 +28,33 @@ data class ToutvResume(val season: Int, val episode: Int, val completed: Boolean
 object ToutvParser {
     private const val IMAGE_WIDTH = "360"
 
-    fun parseSearch(root: JsonObject): List<UnifiedSearchResult> {
-        val results = root["results"].array() ?: return emptyList()
-        return results.mapNotNull { item ->
-            val o = item.obj() ?: return@mapNotNull null
-            // "Section" results are curated rows or live channels, not a watchable title; keep shows.
-            if (o["type"].string() != "Show") return@mapNotNull null
-            val title = o["title"].string()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            val slug = o["url"].string()?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            // Search carries no structured type; a "... saison(s)" subtitle marks a series, else a film.
-            // getDetails corrects this from the show's schema.org @type when the title is opened.
-            val series = o["infoTitle"].string()?.contains("saison", ignoreCase = true) == true
-            UnifiedSearchResult(
-                provider = ProviderId.TOUTV,
-                ref = ProviderRef(ProviderId.TOUTV, slug, "https://ici.tou.tv/$slug", Region("CA")),
-                title = title,
-                type = if (series) MediaType.SERIES else MediaType.MOVIE,
-                posterUrl = cardImage(o),
-                availabilityType = AvailabilityType.SUBSCRIPTION,
-            )
-        }
+    fun parseSearch(root: JsonObject): List<UnifiedSearchResult> =
+        root["results"].array()?.mapNotNull { toResult(it.obj()) }.orEmpty()
+
+    /** Titles of a genre category: the show cards live at `content[].items.results[]`, same shape as search. */
+    fun parseCategory(root: JsonObject): List<UnifiedSearchResult> =
+        root["content"].array()
+            ?.flatMap { it.obj()?.get("items").obj()?.get("results").array().orEmpty() }
+            ?.mapNotNull { toResult(it.obj()) }
+            .orEmpty()
+
+    /** Map one Show card (search result or category item) to a unified result. */
+    private fun toResult(o: JsonObject?): UnifiedSearchResult? {
+        // "Section" results are curated rows or live channels, not a watchable title; keep shows.
+        if (o == null || o["type"].string() != "Show") return null
+        val title = o["title"].string()?.takeIf { it.isNotBlank() } ?: return null
+        val slug = o["url"].string()?.takeIf { it.isNotBlank() } ?: return null
+        // A card carries no structured type; a "... saison(s)" subtitle marks a series, else a film.
+        // getDetails corrects this from the show's schema.org @type when the title is opened.
+        val series = o["infoTitle"].string()?.contains("saison", ignoreCase = true) == true
+        return UnifiedSearchResult(
+            provider = ProviderId.TOUTV,
+            ref = ProviderRef(ProviderId.TOUTV, slug, "https://ici.tou.tv/$slug", Region("CA")),
+            title = title,
+            type = if (series) MediaType.SERIES else MediaType.MOVIE,
+            posterUrl = cardImage(o),
+            availabilityType = AvailabilityType.SUBSCRIPTION,
+        )
     }
 
     fun parseDetails(root: JsonObject, ref: ProviderRef): ProviderTitleDetails? {

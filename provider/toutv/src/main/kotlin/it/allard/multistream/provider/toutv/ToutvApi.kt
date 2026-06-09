@@ -59,6 +59,10 @@ class ToutvApi(
     suspend fun getSeasons(slug: String): List<Season> =
         ToutvParser.parseSeasons(getObject("$baseUrl/v2/toutv/show/$slug?device=web"))
 
+    /** Titles for a genre, from the (anonymous) category endpoint. */
+    suspend fun browseByGenre(genreSlug: String): List<UnifiedSearchResult> =
+        ToutvParser.parseCategory(getObject("$baseUrl/v2/toutv/category/$genreSlug?device=web&pageNumber=1&pageSize=$BROWSE_PAGE_SIZE"))
+
     /**
      * Episodes the signed-in member has watched. Radio-Canada exposes no full watched history and no
      * inline per-episode flag, only a "continue watching" (myview) resume point per show, so this marks
@@ -107,6 +111,7 @@ class ToutvApi(
     }
 
     private companion object {
+        const val BROWSE_PAGE_SIZE = 30
         const val CLIENT_KEY = "90505c8d-9c34-4f34-8da1-3a85bdc6d4f4"
         const val USER_AGENT =
             "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"

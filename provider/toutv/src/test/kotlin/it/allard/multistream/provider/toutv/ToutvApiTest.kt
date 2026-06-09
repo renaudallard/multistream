@@ -125,4 +125,28 @@ class ToutvApiTest {
         assertTrue(request.path!!.contains("/v2/toutv/myview"))
         assertEquals("Bearer TOKEN", request.getHeader("Authorization"))
     }
+
+    @Test fun browseByGenre_parsesCategoryShows() = runBlocking {
+        // A genre category lists Show cards at content[].items.results[], same shape as search.
+        server.enqueue(
+            json(
+                """
+                {"content":[{"items":{"results":[
+                  {"type":"Show","title":"Synchro","url":"synchro","infoTitle":"Comedie et humour | 1 saison","images":{"card":{"url":"https://images.tou.tv/(_Size_)/s.jpg"}}},
+                  {"type":"Show","title":"Le daim","url":"le-daim","infoTitle":"Comedie | 1 h 30"},
+                  {"type":"Section","title":"x","url":"section/x"}
+                ]}}]}
+                """.trimIndent(),
+            ),
+        )
+        val results = api.browseByGenre("comedie-et-humour")
+        assertEquals(2, results.size) // the Section card is skipped
+        val synchro = results.first { it.title == "Synchro" }
+        assertEquals(MediaType.SERIES, synchro.type) // "1 saison"
+        assertEquals("synchro", synchro.ref.providerTitleId)
+        assertEquals("https://ici.tou.tv/synchro", synchro.ref.deepLinkHint)
+        assertEquals("https://images.tou.tv/360/s.jpg", synchro.posterUrl)
+        assertEquals(MediaType.MOVIE, results.first { it.title == "Le daim" }.type) // no "saison"
+        assertTrue(server.takeRequest().path!!.contains("/v2/toutv/category/comedie-et-humour"))
+    }
 }
