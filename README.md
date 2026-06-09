@@ -18,8 +18,9 @@
   <img src="https://img.shields.io/badge/Jetpack%20Compose-%26%20Compose%20for%20TV-4285F4?logo=jetpackcompose&logoColor=white" alt="Jetpack Compose and Compose for TV">
 </p>
 
-Search across the services from one box, see show information, **launch directly** into the right
-app at the right title, and track **locally** what you have watched and where you are in a series.
+Search across the services from one box, **browse by genre** without typing a query, see show
+information, **launch directly** into the right app at the right title, and track **locally** what
+you have watched and where you are in a series.
 
 The eleven services: **Netflix**, **Disney+**, **Prime Video**, **Molotov**, **Zattoo**, **Arte**,
 **Plex**, **RTBF Auvio**, **RTL Play**, **Play RTS**, **ICI Tou.tv**.
@@ -40,7 +41,8 @@ The eleven services: **Netflix**, **Disney+**, **Prime Video**, **Molotov**, **Z
 
 Launch plus local watch-tracking is the always-works spine; catalog search is a best-effort,
 per-provider capability layered on top. Each provider is a self-contained leaf module that
-advertises `ProviderCapabilities` (can it search? deep-link a title? an episode? is it live TV?),
+advertises `ProviderCapabilities` (can it search? browse by genre? deep-link a title? an episode? is
+it live TV?),
 and the UI reads those flags and degrades gracefully: a provider that cannot search still launches
 and tracks. There is no DI framework. A small hand-written `AppGraph` wires everything and composes
 the providers into a registry, so one flaky provider never breaks the app. Search fans out to every
@@ -55,28 +57,35 @@ The spine works for **all eleven**: deep-link launch, local watch tracking (watc
 series next-episode, watchlist, continue-watching), a per-provider region setting, and one adaptive
 shell for phone and Android TV.
 
-| Service | Search | Launch | Details | Login | Notes |
-|---|:--:|:--:|:--:|:--:|---|
-| **Netflix** | ✅ | title page | cast, summary | WebView \* | title and in-app-search deep links; search verified on a real device, the session can need a fresh login after heavy use |
-| **Disney+** | ✅ | title page | cast, summary | email / password | verified on a real device; films and series are typed correctly, so episodes list only for series |
-| **Prime Video** | ✅ | detail page | summary | WebView \* | verified on a real device; the TV build is bundled and the mobile package is tried on phones; web-search art is 16:9 (no portrait) |
-| **Molotov** | ✅ | deep link | summary | email / password | verified on a real device; rich title and program deep links; its API carries no cast |
-| **Zattoo** | ✅ | live channel | — | email / password | deep-links to the program's live channel (`zattoo.com/live/<cid>`); the guide carries no synopsis |
-| **Arte** | ✅ | title page | summary | optional | free public API; the region selects the catalog language |
-| **Plex** | ✅ | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
-| **RTBF Auvio** | ✅ | title page | — | optional | free public API |
-| **RTL Play** | ✅ | title page | cast, summary | — | catalog search and details via DPG Media's lfvp API (anonymous, but Belgium-only); needs a Belgian connection |
-| **Play RTS** | ✅ | video page | — | optional | free SRG SSR Integration Layer; video results only |
-| **ICI Tou.tv** | ✅ | title page | cast, summary | optional | Radio-Canada's public catalog API (anonymous, worldwide); lists episodes; only playback is Canada-locked |
+| Service | Search | Genre | Launch | Details | Login | Notes |
+|---|:--:|:--:|:--:|:--:|:--:|---|
+| **Netflix** | ✅ | 8 | title page | cast, summary | WebView \* | title and in-app-search deep links; search verified on a real device, the session can need a fresh login after heavy use |
+| **Disney+** | ✅ | 10 | title page | cast, summary | email / password | verified on a real device; films and series are typed correctly, so episodes list only for series |
+| **Prime Video** | ✅ | 10 | detail page | summary | WebView \* | verified on a real device; the TV build is bundled and the mobile package is tried on phones; web-search art is 16:9 (no portrait) |
+| **Molotov** | ✅ | 9 | deep link | summary | email / password | verified on a real device; rich title and program deep links; its API carries no cast |
+| **Zattoo** | ✅ | — | live channel | — | email / password | live TV: deep-links to the program's live channel (`zattoo.com/live/<cid>`); the guide carries no synopsis |
+| **Arte** | ✅ | 2 | title page | summary | optional | free public API; the region selects the catalog language |
+| **Plex** | ✅ | 10 † | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
+| **RTBF Auvio** | ✅ | 2 | title page | — | optional | free public API |
+| **RTL Play** | ✅ | 1 | title page | cast, summary | — | catalog search and details via DPG Media's lfvp API (anonymous, but Belgium-only); needs a Belgian connection |
+| **Play RTS** | ✅ | 4 | video page | — | optional | free SRG SSR Integration Layer; video results only |
+| **ICI Tou.tv** | ✅ | 9 | title page | cast, summary | optional | Radio-Canada's public catalog API (anonymous, worldwide); lists episodes; only playback is Canada-locked |
 
-`✅ Search` = a real catalog query from this app. `\*` marks a one-time WebView login. Search requires
-that login for Netflix and Prime Video, and the email/password login for Disney+, Molotov and Zattoo;
-Arte, Plex, RTBF Auvio, RTL Play, Play RTS and ICI Tou.tv search without a login. `Details` = what the title screen adds when you
-open a result: a plot summary, and the billed cast where the service exposes it (a release year
-shows wherever search returns one); `—` providers show the poster, title and year only.
+`✅ Search` = a real catalog query from this app. `Genre` = how many of the ten canonical genres
+(Comedy, Drama, Horror, Action, Documentary, Sci-Fi, Crime, Romance, Animation, Kids) the service can
+browse with no search term, from genre chips on the Search screen; public broadcasters organize their
+catalogs by theme, so they map to fewer genres. `†` Plex browses the genres of your own server's
+library, so it needs a connected server (and returns nothing for a Discover-only account). `\*` marks
+a one-time WebView login. Search requires that login for Netflix and Prime Video, and the
+email/password login for Disney+, Molotov and Zattoo; Arte, Plex, RTBF Auvio, RTL Play, Play RTS and
+ICI Tou.tv search without a login. `Details` = what the title screen adds when you open a result: a
+plot summary, and the billed cast where the service exposes it (a release year shows wherever search
+returns one); `—` providers show the poster, title and year only.
 
-Live search is verified on a real device across all eleven services. A small built-in sample catalog
-also ships for an offline demo; live search itself runs only on a device with network.
+Live search is verified on a real device across all eleven services, and genre browse on every service
+that supports it. Leave the search box empty and the genre chips appear; tapping one fans out to the
+providers that carry that genre and merges the catalogs, exactly like a text search. A small built-in
+sample catalog also ships for an offline demo; live search itself runs only on a device with network.
 
 ## Episodes and watched state
 
