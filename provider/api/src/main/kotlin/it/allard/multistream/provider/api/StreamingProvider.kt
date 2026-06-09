@@ -3,6 +3,7 @@ package it.allard.multistream.provider.api
 import android.content.Context
 import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
@@ -55,6 +56,21 @@ interface StreamingProvider {
 
     /** Catalog search. Only called when [ProviderCapabilities.canSearch] is true. */
     suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> = emptyList()
+
+    /** The canonical genres this provider can browse. Empty unless [ProviderCapabilities.canBrowseByGenre]. */
+    fun browsableGenres(): Set<Genre> = emptySet()
+
+    /**
+     * Titles for a genre, without a text query. Only called when [ProviderCapabilities.canBrowseByGenre]
+     * and the genre is in [browsableGenres]; returns empty for a genre the provider does not carry.
+     */
+    suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> = emptyList()
+
+    /**
+     * Open a genre page in the provider's app when it cannot return a genre title list (a degrade for
+     * genre browse). Only used when [ProviderCapabilities.canDeepLinkToGenre].
+     */
+    fun genreLaunchIntent(context: Context, genre: Genre, region: Region): Intent? = null
 
     /** Detail for one of this provider's refs. Only called when [ProviderCapabilities.canGetDetails]. */
     suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? = null

@@ -3,6 +3,8 @@ package it.allard.multistream.feature.search
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -41,6 +44,7 @@ import it.allard.multistream.di.LocalAppGraph
 import it.allard.multistream.ui.appViewModel
 import it.allard.multistream.ui.components.TitleCard
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
     val graph = LocalAppGraph.current
@@ -80,6 +84,19 @@ fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(12.dp))
+        // With an empty query, offer a row of genre chips to browse by genre instead of typing.
+        if (state.query.isBlank() && state.genres.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.genres.forEach { genre ->
+                    FilterChip(
+                        selected = state.selectedGenre == genre,
+                        onClick = { viewModel.browse(genre) },
+                        label = { Text(genre.label) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+        }
         if (state.loading) {
             LinearProgressIndicator(Modifier.fillMaxWidth())
             Spacer(Modifier.height(12.dp))

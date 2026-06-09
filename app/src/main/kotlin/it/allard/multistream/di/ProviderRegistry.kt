@@ -15,4 +15,7 @@ class ProviderRegistry(
 
     suspend fun searchable(): List<StreamingProvider> =
         providers.filter { it.capabilities.canSearch && settings.isEnabled(it.id) }
+
+    suspend fun genreBrowsable(): List<StreamingProvider> =
+        providers.filter { it.capabilities.canBrowseByGenre && settings.isEnabled(it.id) }
 }

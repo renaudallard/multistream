@@ -3,6 +3,7 @@ package it.allard.multistream.domain
 import it.allard.multistream.core.data.SecretStore
 import it.allard.multistream.core.data.SettingsRepository
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.Region
@@ -28,7 +29,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.text.Collator
 import java.util.Collections
+import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 
 /** One emission of a streaming search: the titles merged so far, and whether more are pending. */
@@ -80,6 +83,33 @@ class SearchInteractor(
         if (providers.isNotEmpty()) {
             val snapshot = synchronized(accumulated) { accumulated.toList() }
             send(SearchUpdate(mergeAndIndex(query, snapshot), loading = false))
+        }
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * Browse titles for a genre with no text query: fans out to every enabled provider that can browse
+     * that genre, exactly like [search], and merges by title. Results rank in merge (provider-priority)
+     * order since there is no query to score against.
+     */
+    fun browseByGenre(genre: Genre): Flow<SearchUpdate> = channelFlow {
+        val providers = registry.genreBrowsable().filter { genre in it.browsableGenres() }
+        val accumulated = mutableListOf<UnifiedSearchResult>()
+        send(SearchUpdate(emptyList(), loading = providers.isNotEmpty()))
+        coroutineScope {
+            for (provider in providers) {
+                launch {
+                    val results = runProviderBrowse(provider, genre)
+                    val snapshot = synchronized(accumulated) {
+                        accumulated.addAll(results)
+                        accumulated.toList()
+                    }
+                    send(SearchUpdate(mergeAndIndexAlphabetical(snapshot), loading = true))
+                }
+            }
+        }
+        if (providers.isNotEmpty()) {
+            val snapshot = synchronized(accumulated) { accumulated.toList() }
+            send(SearchUpdate(mergeAndIndexAlphabetical(snapshot), loading = false))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -171,25 +201,42 @@ class SearchInteractor(
         return merged
     }
 
+    // Locale-aware, case- and accent-friendly title sort for genre browse (there is no query to rank by).
+    private val titleCollator = Collator.getInstance(Locale.FRENCH).also { it.strength = Collator.SECONDARY }
+
+    private fun mergeAndIndexAlphabetical(results: List<UnifiedSearchResult>): List<Title> {
+        val merged = mergeResults(results).sortedWith { a, b -> titleCollator.compare(a.primaryTitle, b.primaryTitle) }
+        merged.forEach { index[it.key.serialize()] = it }
+        return merged
+    }
+
+    /** The per-provider config from settings region + secrets (no specific ref), for search/browse. */
+    private suspend fun configFor(provider: StreamingProvider): ProviderConfig {
+        val region = settings.region(provider.id) ?: provider.supportedRegions().firstOrNull() ?: Region("US")
+        return ProviderConfig(
+            region,
+            enabled = true,
+            secrets = secrets().read(provider.id),
+            persistSecrets = { secrets().write(provider.id, it) },
+        )
+    }
+
     private suspend fun runProviderSearch(provider: StreamingProvider, query: String): List<UnifiedSearchResult> =
         withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
             // runCatchingExceptCancellation lets a real cancellation (a superseded search) through
             // while still degrading a slow/failed provider to no results; the timeout cancellation is
             // caught by withTimeoutOrNull.
             runCatchingExceptCancellation {
-                val region = settings.region(provider.id)
-                    ?: provider.supportedRegions().firstOrNull()
-                    ?: Region("US")
-                provider.search(
-                    query,
-                    region,
-                    ProviderConfig(
-                        region,
-                        enabled = true,
-                        secrets = secrets().read(provider.id),
-                        persistSecrets = { secrets().write(provider.id, it) },
-                    ),
-                )
+                val config = configFor(provider)
+                provider.search(query, config.region, config)
+            }.getOrNull()
+        } ?: emptyList()
+
+    private suspend fun runProviderBrowse(provider: StreamingProvider, genre: Genre): List<UnifiedSearchResult> =
+        withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
+            runCatchingExceptCancellation {
+                val config = configFor(provider)
+                provider.browseByGenre(genre, config.region, config)
             }.getOrNull()
         } ?: emptyList()
 

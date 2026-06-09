@@ -2,6 +2,7 @@ package it.allard.multistream.feature.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.Title
 import it.allard.multistream.di.ProviderRegistry
 import it.allard.multistream.domain.SearchInteractor
@@ -24,6 +25,8 @@ class SearchViewModel(
         val query: String = "",
         val loading: Boolean = false,
         val searched: Boolean = false,
+        val selectedGenre: Genre? = null,
+        val genres: List<Genre> = emptyList(),
         val results: List<Title> = emptyList(),
         val degrade: List<StreamingProvider> = emptyList(),
         val message: String? = null,
@@ -34,6 +37,16 @@ class SearchViewModel(
 
     private var searchJob: Job? = null
 
+    init {
+        // The genre chips offer only genres some enabled provider can actually browse or open.
+        viewModelScope.launch {
+            val available = registry.enabled().flatMap { p ->
+                if (p.capabilities.canBrowseByGenre || p.capabilities.canDeepLinkToGenre) p.browsableGenres() else emptySet()
+            }.toSet()
+            _state.update { s -> s.copy(genres = Genre.entries.filter { it in available }) }
+        }
+    }
+
     fun onQueryChange(query: String) = _state.update { it.copy(query = query) }
 
     fun submit() {
@@ -42,8 +55,20 @@ class SearchViewModel(
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             val degrade = registry.enabled().filter { !it.capabilities.canSearch }
-            _state.update { it.copy(loading = true, searched = true, results = emptyList(), degrade = degrade) }
+            _state.update { it.copy(loading = true, searched = true, selectedGenre = null, results = emptyList(), degrade = degrade) }
             interactor.search(query).collect { update ->
+                _state.update { it.copy(loading = update.loading, results = update.results) }
+            }
+        }
+    }
+
+    /** Browse a genre with no text query: stream merged results from every genre-capable provider. */
+    fun browse(genre: Genre) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            val degrade = registry.enabled().filter { it.capabilities.canDeepLinkToGenre && genre in it.browsableGenres() }
+            _state.update { it.copy(loading = true, searched = true, selectedGenre = genre, results = emptyList(), degrade = degrade) }
+            interactor.browseByGenre(genre).collect { update ->
                 _state.update { it.copy(loading = update.loading, results = update.results) }
             }
         }
