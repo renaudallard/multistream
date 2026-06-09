@@ -184,4 +184,44 @@ class PlexApiTest {
             assertTrue(e.authError)
         }
     }
+
+    @Test fun browseGenre_resolvesServerGenreIdByTitleAndFiltersSection() = runBlocking {
+        val base = server.url("/").toString().removeSuffix("/")
+        // 1. library sections: a movie section is kept, the music section is skipped.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"MediaContainer":{"Directory":[
+                   {"key":"1","type":"movie","title":"Films"},
+                   {"key":"9","type":"artist","title":"Music"}
+                ]}}""",
+            ),
+        )
+        // 2. the movie section's genres: "Comedy" resolves to local id 5.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"MediaContainer":{"Directory":[
+                   {"key":"5","title":"Comedy"},{"key":"6","title":"Drama"}
+                ]}}""",
+            ),
+        )
+        // 3. the section filtered by genre id 5.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """{"MediaContainer":{"Metadata":[
+                   {"ratingKey":"m1","type":"movie","title":"Airplane!","year":1980}
+                ]}}""",
+            ),
+        )
+        val results = api.browseGenre(listOf("Comedy"), base, "srv-token")
+        assertEquals(1, results.size)
+        assertEquals("Airplane!", results[0].title)
+        assertTrue(server.takeRequest().path!!.contains("/library/sections"))
+        assertTrue(server.takeRequest().path!!.contains("/library/sections/1/genre"))
+        assertTrue(server.takeRequest().path!!.contains("genre=5"))
+    }
+
+    @Test fun browseGenre_returnsEmptyWithoutAServer() = runBlocking {
+        val results = api.browseGenre(listOf("Comedy"), null, null)
+        assertEquals(0, results.size)
+    }
 }

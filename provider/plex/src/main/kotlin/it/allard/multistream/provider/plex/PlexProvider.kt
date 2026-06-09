@@ -3,6 +3,7 @@ package it.allard.multistream.provider.plex
 import android.content.Context
 import android.content.Intent
 import it.allard.multistream.core.model.EpisodeCoord
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
@@ -34,6 +35,7 @@ class PlexProvider(
     override val packageName = "com.plexapp.android"
     override val capabilities = ProviderCapabilities(
         canSearch = true,
+        canBrowseByGenre = true,
         canGetDetails = true,
         canListEpisodes = true,
         canFetchWatchState = true,
@@ -111,6 +113,17 @@ class PlexProvider(
         }
     }
 
+    // Genre browse runs against the member's own server library (Discover has no genre route). The genre
+    // id is server-local, so it is resolved by name from each section; the aliases cover Plex's English
+    // genre titles. Returns nothing for a Discover-only account with no server.
+    override fun browsableGenres(): Set<Genre> = GENRE_ALIASES.keys
+
+    override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
+        ensureSession(config)
+        val aliases = GENRE_ALIASES[genre] ?: return emptyList()
+        return runCatchingExceptCancellation { api.browseGenre(aliases, server, token) }.getOrDefault(emptyList())
+    }
+
     override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? {
         ensureSession(config)
         val serverUrl = server ?: return null
@@ -147,4 +160,22 @@ class PlexProvider(
 
     override fun launchAppFallback(context: Context, query: String?): Intent? =
         Launcher.launchApp(context, packageName)
+
+    private companion object {
+        // Canonical genre -> the Plex genre titles it can match on a server. A server tags content in its
+        // metadata-agent language, so both English and French titles are listed (a real device showed a
+        // mix of Comedy/Comédie, Drama/Drame, ...). The match is case-insensitive.
+        val GENRE_ALIASES = mapOf(
+            Genre.COMEDY to listOf("Comedy", "Comédie"),
+            Genre.DRAMA to listOf("Drama", "Drame"),
+            Genre.HORROR to listOf("Horror", "Horreur"),
+            Genre.ACTION to listOf("Action", "Action/Adventure", "Action/Aventure", "Adventure", "Aventure"),
+            Genre.DOCUMENTARY to listOf("Documentary", "Documentaire"),
+            Genre.SCIFI to listOf("Science Fiction", "Science-Fiction", "Sci-Fi", "Sci-Fi & Fantasy"),
+            Genre.CRIME to listOf("Crime"),
+            Genre.ROMANCE to listOf("Romance"),
+            Genre.ANIMATION to listOf("Animation", "Anime"),
+            Genre.KIDS to listOf("Family", "Familial", "Kids", "Children", "Jeunesse"),
+        )
+    }
 }

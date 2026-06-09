@@ -18,6 +18,7 @@ import it.allard.multistream.core.net.string
 import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import okhttp3.FormBody
 import okhttp3.Headers
 import okhttp3.OkHttpClient
@@ -213,6 +214,45 @@ class PlexApi(
             return PlexParser.parse(root)
         }
     }
+
+    /**
+     * Browse a genre on the member's own Plex Media Server. Genre browse lives on the server library
+     * (Discover has no such route): each movie/show library section is listed, its genre tags are matched
+     * against [genreAliases] by title, and the section is filtered by each matching tag id. A server can
+     * carry the same genre under several localized tags (e.g. Comedy and Comédie), so every match is
+     * queried and the results merged. Returns empty for a Discover-only account with no server.
+     */
+    suspend fun browseGenre(genreAliases: List<String>, serverUrl: String?, serverToken: String?): List<UnifiedSearchResult> {
+        if (serverUrl == null || serverToken == null) return emptyList()
+        val base = serverUrl.trimEnd('/')
+        val sections = getJson("$base/library/sections", serverToken)
+            ?.get("MediaContainer").obj()?.get("Directory").array()?.mapNotNull { it.obj() }.orEmpty()
+            .filter { it["type"].string() == "movie" || it["type"].string() == "show" }
+        PlexImageAuth.register(serverUrl, serverToken)
+        val out = LinkedHashMap<String, UnifiedSearchResult>()
+        for (section in sections) {
+            val key = section["key"].string() ?: continue
+            val genreIds = getJson("$base/library/sections/$key/genre", serverToken)
+                ?.get("MediaContainer").obj()?.get("Directory").array()?.mapNotNull { it.obj() }.orEmpty()
+                .filter { g -> genreAliases.any { it.equals(g["title"].string(), ignoreCase = true) } }
+                .mapNotNull { it["key"].string() ?: it["id"].int()?.toString() }
+            for (genreId in genreIds) {
+                getJson("$base/library/sections/$key/all?genre=$genreId&limit=30", serverToken)
+                    ?.let { PlexParser.parse(it, imageBase = serverUrl) }
+                    ?.forEach { out.putIfAbsent(it.ref.providerTitleId, it) }
+            }
+        }
+        return out.values.toList()
+    }
+
+    /** GET a server URL and parse the body to a JSON object; null on any non-2xx or transport error. */
+    private suspend fun getJson(url: String, token: String): JsonObject? =
+        runCatchingExceptCancellation {
+            client.await(Request.Builder().url(url).headers(headers(token)).get().build()).use { response ->
+                if (!response.isSuccessful) null
+                else NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
+            }
+        }.getOrNull()
 
     private fun headers(token: String?): Headers {
         val builder = Headers.Builder()
