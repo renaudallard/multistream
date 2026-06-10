@@ -11,6 +11,7 @@
     <string name="action_open">Open</string>
     <string name="action_details">Details</string>
     <string name="action_back">← Back</string>
+    <string name="action_clear">Clear</string>
 
     <!-- Search -->
     <string name="search_no_matches">No catalog matches yet.</string>

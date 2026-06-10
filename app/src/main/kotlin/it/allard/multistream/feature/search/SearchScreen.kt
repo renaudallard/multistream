@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -77,8 +79,15 @@ fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { viewModel.submit() }),
             trailingIcon = {
-                IconButton(onClick = viewModel::submit) {
-                    Icon(Icons.Default.Search, contentDescription = stringResource(R.string.tab_search))
+                Row {
+                    if (state.query.isNotEmpty()) {
+                        IconButton(onClick = viewModel::clearQuery) {
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.action_clear))
+                        }
+                    }
+                    IconButton(onClick = viewModel::submit) {
+                        Icon(Icons.Default.Search, contentDescription = stringResource(R.string.tab_search))
+                    }
                 }
             },
             modifier = Modifier.fillMaxWidth(),

@@ -55,11 +55,18 @@ class SearchViewModel(
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             val degrade = registry.enabled().filter { !it.capabilities.canSearch }
-            _state.update { it.copy(loading = true, searched = true, selectedGenre = null, results = emptyList(), degrade = degrade) }
+            // Write the trimmed query back so the field shows what was actually searched, without trailing spaces.
+            _state.update { it.copy(query = query, loading = true, searched = true, selectedGenre = null, results = emptyList(), degrade = degrade) }
             interactor.search(query).collect { update ->
                 _state.update { it.copy(loading = update.loading, results = update.results) }
             }
         }
+    }
+
+    /** Reset the search field and clear any results, returning the screen to its empty state. */
+    fun clearQuery() {
+        searchJob?.cancel()
+        _state.update { it.copy(query = "", loading = false, searched = false, selectedGenre = null, results = emptyList(), degrade = emptyList()) }
     }
 
     /** Browse a genre with no text query: stream merged results from every genre-capable provider. */
