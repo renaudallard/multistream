@@ -99,5 +99,8 @@ dependencies {
     implementation(libs.androidx.tv.material)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.okhttp)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    testImplementation(libs.junit)
 }

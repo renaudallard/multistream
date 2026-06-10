@@ -93,4 +93,9 @@
     <string name="launch_opening">Opening %1$s…</string>
     <string name="launch_cant_open">Couldn\'t open %1$s</string>
     <string name="launch_not_installed">%1$s isn\'t installed</string>
+
+    <!-- Update check -->
+    <string name="update_available">Update %1$s available</string>
+    <string name="action_download">Download</string>
+    <string name="action_dismiss">Dismiss</string>
 </resources>

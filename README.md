@@ -53,6 +53,10 @@ list by how closely each title matches the query (a full-phrase match before par
 Opening a series lists its episodes by asking every provider that can enumerate them and unioning the
 results, so a service carrying the full run completes one that holds only part of it.
 
+On each launch the app asks GitHub for the latest release and, if it is newer than the running build,
+shows a dismissible banner linking straight to the new APK. The check is best-effort: offline, a
+rate-limited API, or any error just leaves the banner hidden.
+
 ## Services and capabilities
 
 The spine works for **all eleven**: deep-link launch, local watch tracking (watched/unwatched,

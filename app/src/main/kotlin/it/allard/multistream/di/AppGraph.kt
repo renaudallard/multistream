@@ -21,6 +21,7 @@ import it.allard.multistream.provider.rtl.RtlProvider
 import it.allard.multistream.provider.rts.RtsProvider
 import it.allard.multistream.provider.toutv.ToutvProvider
 import it.allard.multistream.provider.zattoo.ZattooProvider
+import it.allard.multistream.update.UpdateChecker
 
 /**
  * Hand-written dependency graph (no DI framework). Every singleton is lazy so that constructing the
@@ -54,6 +55,11 @@ class AppGraph(context: Context) {
     val registry: ProviderRegistry by lazy { ProviderRegistry(providers, settings) }
     val searchInteractor: SearchInteractor by lazy { SearchInteractor(registry, settings) { secrets } }
     val launchController: LaunchController by lazy { LaunchController(appContext) }
+    val updateChecker: UpdateChecker by lazy { UpdateChecker(currentVersionName()) }
+
+    @Suppress("DEPRECATION")
+    private fun currentVersionName(): String =
+        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName ?: ""
 }
 
 val LocalAppGraph = staticCompositionLocalOf<AppGraph> { error("AppGraph not provided") }
