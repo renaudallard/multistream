@@ -25,6 +25,8 @@ you have watched and where you are in a series.
 The eleven services: **Netflix**, **Disney+**, **Prime Video**, **Molotov**, **Zattoo**, **Arte**,
 **Plex**, **RTBF Auvio**, **RTL Play**, **Play RTS**, **ICI Tou.tv**.
 
+The interface is available in English and French, following the device language.
+
 ## Contents
 
 - [How it works](#how-it-works)

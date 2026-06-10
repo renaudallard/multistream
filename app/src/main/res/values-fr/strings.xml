@@ -1,0 +1,84 @@
+<resources>
+    <string name="app_name">multistream</string>
+
+    <!-- Navigation -->
+    <string name="tab_search">Recherche</string>
+    <string name="tab_library">Bibliothèque</string>
+    <string name="tab_settings">Paramètres</string>
+    <string name="search_hint">Rechercher dans vos applis de streaming</string>
+
+    <!-- Common actions -->
+    <string name="action_open">Ouvrir</string>
+    <string name="action_details">Détails</string>
+    <string name="action_back">← Retour</string>
+    <string name="action_clear">Effacer</string>
+
+    <!-- Search -->
+    <string name="search_no_matches">Aucun résultat dans les catalogues.</string>
+    <string name="search_direct_in">Rechercher directement dans :</string>
+    <string name="search_opens_in_app">Ouvre la recherche dans l\'appli</string>
+    <string name="search_opens_app">Ouvre l\'appli</string>
+
+    <!-- Library -->
+    <string name="library_continue_watching">Reprendre la lecture</string>
+    <string name="library_watchlist">Ma liste</string>
+    <string name="library_history">Historique</string>
+    <string name="library_empty">Rien de suivi pour l\'instant. Recherchez une série, ouvrez-la et marquez les épisodes comme vus.</string>
+
+    <!-- Detail -->
+    <string name="detail_title_not_found">Titre introuvable.</string>
+    <string name="detail_cast">Distribution : %1$s</string>
+    <string name="detail_in_watchlist">Dans Ma liste ✓</string>
+    <string name="detail_add_to_watchlist">Ajouter à Ma liste</string>
+    <string name="detail_watched">Vu ✓</string>
+    <string name="detail_mark_watched">Marquer comme vu</string>
+    <string name="detail_play_on">Lire sur %1$s</string>
+    <string name="detail_resume_episode">Reprendre S%1$dE%2$d</string>
+    <string name="detail_season_number">Saison %1$d</string>
+    <string name="detail_sync_watched">Synchroniser les épisodes vus depuis %1$s</string>
+    <string name="detail_import_done">%1$d épisodes vus importés</string>
+    <string name="detail_import_none">Aucun épisode vu trouvé</string>
+
+    <!-- Settings: login -->
+    <string name="settings_logged_in">Connecté ✓</string>
+    <string name="settings_log_out">Se déconnecter</string>
+    <string name="settings_log_in">Se connecter</string>
+    <string name="settings_log_in_browser">Se connecter (navigateur)</string>
+    <string name="settings_login_optional">Facultatif — la recherche fonctionne sans connexion.</string>
+    <string name="settings_label_email">E-mail</string>
+    <string name="settings_label_password">Mot de passe</string>
+    <string name="settings_region">Région : %1$s</string>
+    <string name="settings_region_not_set">non définie</string>
+
+    <!-- Settings: device link -->
+    <string name="settings_link_account">Associer le compte</string>
+    <string name="settings_link_open_signin">Ouvrir la connexion Plex</string>
+    <string name="settings_link_approve">Validez la connexion dans votre navigateur, puis revenez ici.</string>
+    <string name="settings_link_waiting">En attente de votre validation…</string>
+    <string name="settings_link_cancel">Annuler</string>
+    <string name="weblogin_finish">Je suis connecté — terminer</string>
+
+    <!-- Settings: capability chips -->
+    <string name="capability_search">Recherche</string>
+    <string name="capability_launch_only">Lancement seul</string>
+    <string name="capability_deep_link">Lien direct</string>
+    <string name="capability_live_tv">TV en direct</string>
+    <string name="capability_login">Connexion</string>
+    <string name="capability_login_optional">Connexion facultative</string>
+
+    <!-- Status messages -->
+    <string name="msg_enter_credentials">Saisissez %1$s et %2$s</string>
+    <string name="msg_logged_in">%1$s : connecté</string>
+    <string name="msg_logged_out">%1$s : déconnecté</string>
+    <string name="msg_status">%1$s : %2$s</string>
+    <string name="msg_linking_unavailable">%1$s : association indisponible</string>
+    <string name="msg_linking_in_progress">Terminez d\'abord l\'association en cours</string>
+    <string name="msg_linking_timed_out">%1$s : association expirée — réessayez</string>
+    <string name="msg_linked">%1$s : associé</string>
+    <string name="msg_login_failed">échec de la connexion</string>
+
+    <!-- Launch -->
+    <string name="launch_opening">Ouverture de %1$s…</string>
+    <string name="launch_cant_open">Impossible d\'ouvrir %1$s</string>
+    <string name="launch_not_installed">%1$s n\'est pas installé</string>
+</resources>
