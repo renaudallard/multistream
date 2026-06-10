@@ -1,6 +1,7 @@
 package it.allard.multistream.feature.search
 
 import android.widget.Toast
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -41,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import it.allard.multistream.R
+import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.TitleKey
 import it.allard.multistream.di.LocalAppGraph
 import it.allard.multistream.ui.appViewModel
@@ -100,7 +102,7 @@ fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
                     FilterChip(
                         selected = state.selectedGenre == genre,
                         onClick = { viewModel.browse(genre) },
-                        label = { Text(genre.label) },
+                        label = { Text(stringResource(genre.labelRes())) },
                     )
                 }
             }
@@ -143,4 +145,19 @@ fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
             }
         }
     }
+}
+
+/** Localized display name for a browse genre; the model keeps only the constant. */
+@StringRes
+private fun Genre.labelRes(): Int = when (this) {
+    Genre.COMEDY -> R.string.genre_comedy
+    Genre.DRAMA -> R.string.genre_drama
+    Genre.HORROR -> R.string.genre_horror
+    Genre.ACTION -> R.string.genre_action
+    Genre.DOCUMENTARY -> R.string.genre_documentary
+    Genre.SCIFI -> R.string.genre_scifi
+    Genre.CRIME -> R.string.genre_crime
+    Genre.ROMANCE -> R.string.genre_romance
+    Genre.ANIMATION -> R.string.genre_animation
+    Genre.KIDS -> R.string.genre_kids
 }

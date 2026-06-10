@@ -19,6 +19,18 @@
     <string name="search_opens_in_app">Ouvre la recherche dans l\'appli</string>
     <string name="search_opens_app">Ouvre l\'appli</string>
 
+    <!-- Genres -->
+    <string name="genre_comedy">Comédie</string>
+    <string name="genre_drama">Drame</string>
+    <string name="genre_horror">Horreur</string>
+    <string name="genre_action">Action</string>
+    <string name="genre_documentary">Documentaire</string>
+    <string name="genre_scifi">Science-fiction</string>
+    <string name="genre_crime">Policier</string>
+    <string name="genre_romance">Romance</string>
+    <string name="genre_animation">Animation</string>
+    <string name="genre_kids">Jeunesse</string>
+
     <!-- Library -->
     <string name="library_continue_watching">Reprendre la lecture</string>
     <string name="library_watchlist">Ma liste</string>

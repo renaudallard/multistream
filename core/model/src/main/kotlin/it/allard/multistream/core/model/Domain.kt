@@ -7,18 +7,19 @@ enum class ProviderId { NETFLIX, DISNEY, PRIME, MOLOTOV, ZATTOO, ARTE, PLEX, RTB
 
 enum class MediaType { MOVIE, SERIES, EPISODE, LIVE_CHANNEL, LIVE_PROGRAM }
 
-/** Canonical genres a user can browse by, mapped to each provider's own genre id/slug. */
-enum class Genre(val label: String) {
-    COMEDY("Comedy"),
-    DRAMA("Drama"),
-    HORROR("Horror"),
-    ACTION("Action"),
-    DOCUMENTARY("Documentary"),
-    SCIFI("Sci-Fi"),
-    CRIME("Crime"),
-    ROMANCE("Romance"),
-    ANIMATION("Animation"),
-    KIDS("Kids"),
+/** Canonical genres a user can browse by, mapped to each provider's own genre id/slug.
+ *  Display names are localized in the app module's string resources, keyed by constant. */
+enum class Genre {
+    COMEDY,
+    DRAMA,
+    HORROR,
+    ACTION,
+    DOCUMENTARY,
+    SCIFI,
+    CRIME,
+    ROMANCE,
+    ANIMATION,
+    KIDS,
 }
 
 enum class AvailabilityType { SUBSCRIPTION, LIVE, CATCHUP, RENT, BUY, FREE_ADS, UNKNOWN }
