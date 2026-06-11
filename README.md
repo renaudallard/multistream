@@ -199,6 +199,19 @@ Release build (signed and R8-shrunk):
 
 `local.properties` (git-ignored) points Gradle at the SDK: `sdk.dir=/home/r/Android/Sdk`.
 
+### Continuous integration and releases
+
+`.github/workflows/ci.yml` runs the unit tests, lint, and a debug build on every push to `master` and
+on pull requests. `.github/workflows/release.yml` publishes a release: push a tag and it builds the
+signed APK and creates the GitHub release for you.
+
+```bash
+git tag v0.2.5 && git push origin v0.2.5   # builds + publishes the release; do not use `gh release create`
+```
+
+The release workflow signs with four repository secrets: `KEYSTORE_BASE64` (the keystore from
+`base64 -w0 multistream-release.keystore`), `KEYSTORE_PASSWORD`, `KEY_ALIAS`, and `KEY_PASSWORD`.
+
 ### Installing the target streaming apps (for deep-link testing)
 
 They live in `apks/`. Netflix is a plain APK; the others are split `.xapk` bundles, so unzip and use
