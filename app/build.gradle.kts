@@ -73,6 +73,7 @@ base {
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:data"))
+    implementation(project(":core:net"))
     implementation(project(":provider:api"))
     implementation(project(":provider:netflix"))
     implementation(project(":provider:disney"))
@@ -99,7 +100,6 @@ dependencies {
     implementation(libs.androidx.tv.material)
     implementation(libs.coil.compose)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.okhttp)
     debugImplementation(libs.androidx.compose.ui.tooling)
 
     testImplementation(libs.junit)

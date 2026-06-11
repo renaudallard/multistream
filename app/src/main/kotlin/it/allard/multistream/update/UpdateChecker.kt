@@ -1,14 +1,15 @@
 package it.allard.multistream.update
 
-import kotlinx.coroutines.Dispatchers
+import it.allard.multistream.core.net.NetJson
+import it.allard.multistream.core.net.await
+import it.allard.multistream.core.net.buildClient
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.Request
-import org.json.JSONArray
-import java.util.concurrent.TimeUnit
-import org.json.JSONObject
 
 /** A newer release found on GitHub, with the direct link to its APK asset. */
 data class UpdateInfo(val version: String, val apkUrl: String)
@@ -16,14 +17,12 @@ data class UpdateInfo(val version: String, val apkUrl: String)
 /**
  * Checks the project's GitHub releases for a version newer than the running app. Every failure
  * (offline, rate limit, malformed payload) resolves to null so a launch check can never disrupt
- * startup or nag the user.
+ * startup or nag the user. The request goes through the shared [buildClient]/[await] net layer, which
+ * caps the response body against an OOM and cancels the call together with the coroutine.
  */
 class UpdateChecker(private val currentVersion: String) {
 
-    private val client = OkHttpClient.Builder()
-        .callTimeout(10, TimeUnit.SECONDS)
-        .build()
-
+    private val client = buildClient()
     private val mutex = Mutex()
     private var cached: UpdateInfo? = null
     private var checked = false
@@ -41,24 +40,18 @@ class UpdateChecker(private val currentVersion: String) {
         cached
     }
 
-    private suspend fun fetchLatest(): UpdateInfo? = withContext(Dispatchers.IO) {
-        runCatching {
-            val request = Request.Builder()
-                .url(LATEST_RELEASE_URL)
-                .header("Accept", "application/vnd.github+json")
-                .header("User-Agent", USER_AGENT)
-                .build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return@use null
-                val body = response.body?.string() ?: return@use null
-                val json = JSONObject(body)
-                val tag = json.optString("tag_name")
-                if (tag.isEmpty() || !isNewer(tag, currentVersion)) return@use null
-                val apkUrl = json.optJSONArray("assets").firstApkUrl() ?: return@use null
-                UpdateInfo(tag.removePrefix("v").removePrefix("V"), apkUrl)
-            }
-        }.getOrNull()
-    }
+    private suspend fun fetchLatest(): UpdateInfo? = runCatching {
+        val request = Request.Builder()
+            .url(LATEST_RELEASE_URL)
+            .header("Accept", "application/vnd.github+json")
+            .header("User-Agent", USER_AGENT)
+            .build()
+        client.await(request).use { response ->
+            if (!response.isSuccessful) return@use null
+            val body = response.body?.string() ?: return@use null
+            parseUpdate(body, currentVersion)
+        }
+    }.getOrNull()
 
     private companion object {
         const val REPO = "renaudallard/multistream"
@@ -67,16 +60,21 @@ class UpdateChecker(private val currentVersion: String) {
     }
 }
 
-/** Picks the first asset whose name looks like an APK and returns its direct download URL. */
-private fun JSONArray?.firstApkUrl(): String? {
-    if (this == null) return null
-    for (i in 0 until length()) {
-        val asset = optJSONObject(i) ?: continue
-        if (asset.optString("name").endsWith(".apk", ignoreCase = true)) {
-            return asset.optString("browser_download_url").ifEmpty { null }
-        }
-    }
-    return null
+/**
+ * Turn a GitHub "latest release" payload into an [UpdateInfo] when its tag is newer than
+ * [currentVersion] and it ships an APK asset; null otherwise. Pure, so it is unit-tested directly.
+ */
+internal fun parseUpdate(body: String, currentVersion: String): UpdateInfo? {
+    val root = NetJson.parseToJsonElement(body) as? JsonObject ?: return null
+    val tag = root["tag_name"]?.jsonPrimitive?.contentOrNull ?: return null
+    if (tag.isEmpty() || !isNewer(tag, currentVersion)) return null
+    val apkUrl = (root["assets"] as? JsonArray).orEmpty()
+        .mapNotNull { it as? JsonObject }
+        .firstOrNull { it["name"]?.jsonPrimitive?.contentOrNull?.endsWith(".apk", ignoreCase = true) == true }
+        ?.get("browser_download_url")?.jsonPrimitive?.contentOrNull
+        ?.takeIf { it.isNotEmpty() }
+        ?: return null
+    return UpdateInfo(tag.removePrefix("v").removePrefix("V"), apkUrl)
 }
 
 /** True when [latest] is a strictly higher dotted version than [current]; a leading "v" is ignored. */
