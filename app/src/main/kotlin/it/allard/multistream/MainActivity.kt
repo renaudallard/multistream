@@ -108,7 +108,10 @@ fun MultistreamRoot() {
             if (info != null && !updateDismissed) {
                 UpdateBanner(
                     version = info.version,
-                    onDownload = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.apkUrl))) },
+                    onDownload = {
+                        // Guard against a device with nothing able to open the link (no crash on tap).
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(info.apkUrl))) }
+                    },
                     onDismiss = { updateDismissed = true },
                 )
             }
