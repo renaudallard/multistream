@@ -144,18 +144,23 @@ class WatchRepository(private val db: MultistreamDatabase) {
                 lastActivityAt = now,
             ),
         )
-        val status = when {
-            last == null -> WatchStatus.UNWATCHED
-            next == null -> WatchStatus.WATCHED
-            else -> WatchStatus.WATCHING
-        }
-        dao.setStatus(key, status.name, now)
+        dao.setStatus(key, rollupStatus(last, next).name, now)
     }
 
     private fun now() = System.currentTimeMillis()
 }
 
-private fun TrackedTitleEntity.toEntry(nextSeason: Int? = null, nextEpisode: Int? = null) = LibraryEntry(
+/**
+ * Roll a series up to a single status from its watch progress: nothing watched is [WatchStatus.UNWATCHED],
+ * no episode left to watch is [WatchStatus.WATCHED], anything in between is [WatchStatus.WATCHING].
+ */
+internal fun rollupStatus(last: EpisodeCoord?, next: EpisodeCoord?): WatchStatus = when {
+    last == null -> WatchStatus.UNWATCHED
+    next == null -> WatchStatus.WATCHED
+    else -> WatchStatus.WATCHING
+}
+
+internal fun TrackedTitleEntity.toEntry(nextSeason: Int? = null, nextEpisode: Int? = null) = LibraryEntry(
     key = TitleKey.parse(titleKey),
     title = primaryTitle,
     year = year,
