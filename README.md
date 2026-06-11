@@ -12,6 +12,7 @@
 <p align="center">
   <a href="https://github.com/renaudallard/multistream/releases/latest"><img src="https://img.shields.io/github/v/release/renaudallard/multistream?label=Download%20APK&logo=android&logoColor=white&color=3DDC84" alt="Download the latest APK"></a>
   <a href="https://github.com/renaudallard/multistream/releases"><img src="https://img.shields.io/github/downloads/renaudallard/multistream/total?label=downloads&logo=github&logoColor=white&color=2C3E50" alt="Total downloads"></a>
+  <a href="https://github.com/renaudallard/multistream/actions/workflows/ci.yml"><img src="https://github.com/renaudallard/multistream/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
   <img src="https://img.shields.io/badge/Kotlin-2.0.21-7F52FF?logo=kotlin&logoColor=white" alt="Kotlin 2.0.21">
   <img src="https://img.shields.io/badge/Android-phone%20%C2%B7%20tablet%20%C2%B7%20TV-3DDC84?logo=android&logoColor=white" alt="Android phone, tablet, TV">
   <img src="https://img.shields.io/badge/minSdk-24-2C3E50" alt="minSdk 24">
