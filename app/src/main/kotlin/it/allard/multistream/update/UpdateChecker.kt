@@ -1,6 +1,8 @@
 package it.allard.multistream.update
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -22,7 +24,24 @@ class UpdateChecker(private val currentVersion: String) {
         .callTimeout(10, TimeUnit.SECONDS)
         .build()
 
-    suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
+    private val mutex = Mutex()
+    private var cached: UpdateInfo? = null
+    private var checked = false
+
+    /**
+     * Returns a newer release if one exists. The result is memoized for the process lifetime, so a
+     * config-change recreation (rotation, theme, locale) reuses the first answer instead of calling
+     * the API again; a fresh launch is a new process and so checks anew.
+     */
+    suspend fun check(): UpdateInfo? = mutex.withLock {
+        if (!checked) {
+            cached = fetchLatest()
+            checked = true
+        }
+        cached
+    }
+
+    private suspend fun fetchLatest(): UpdateInfo? = withContext(Dispatchers.IO) {
         runCatching {
             val request = Request.Builder()
                 .url(LATEST_RELEASE_URL)
