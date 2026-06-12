@@ -1,6 +1,7 @@
 package it.allard.multistream.core.data
 
 import android.content.Context
+import android.util.Log
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -38,11 +39,12 @@ class SettingsRepository(private val context: Context) {
     suspend fun region(provider: ProviderId): Region? = regionFlow(provider).first()
 
     // A failed settings write (corrupt or full storage raises IOException) must not crash the caller;
-    // the preference simply isn't saved.
+    // the preference simply isn't saved, but the failure is logged so it can be diagnosed.
     suspend fun setEnabled(provider: ProviderId, enabled: Boolean) {
         try {
             context.settingsDataStore.edit { it[enabledKey(provider)] = enabled }
         } catch (e: IOException) {
+            Log.w(TAG, "Failed to save enabled=$enabled for ${provider.name}", e)
         }
     }
 
@@ -50,9 +52,14 @@ class SettingsRepository(private val context: Context) {
         try {
             context.settingsDataStore.edit { it[regionKey(provider)] = region.code }
         } catch (e: IOException) {
+            Log.w(TAG, "Failed to save region ${region.code} for ${provider.name}", e)
         }
     }
 
     private fun enabledKey(provider: ProviderId) = booleanPreferencesKey("enabled_${provider.name}")
     private fun regionKey(provider: ProviderId) = stringPreferencesKey("region_${provider.name}")
+
+    private companion object {
+        const val TAG = "SettingsRepository"
+    }
 }
