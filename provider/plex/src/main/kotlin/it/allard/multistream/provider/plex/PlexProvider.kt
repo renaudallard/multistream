@@ -137,9 +137,7 @@ class PlexProvider(
         // Discover-only result has no server item, so without a server/token there is nothing to list.
         val serverUrl = server ?: return emptyList()
         val serverToken = token ?: return emptyList()
-        return runCatchingExceptCancellation {
-            api.getSeasons(serverUrl, serverToken, ref.providerTitleId)
-        }.getOrDefault(emptyList())
+        return api.getSeasons(serverUrl, serverToken, ref.providerTitleId)
     }
 
     override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> {

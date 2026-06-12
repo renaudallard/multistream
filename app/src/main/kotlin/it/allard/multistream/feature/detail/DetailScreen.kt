@@ -133,6 +133,15 @@ fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
                         }
                     }
                     Spacer(Modifier.height(8.dp))
+                    // Every provider that can list episodes errored: say so instead of showing the
+                    // same nothing as a title that simply has no enumerable episodes.
+                    if (state.episodesFailed && title.seasons.isEmpty()) {
+                        Text(
+                            stringResource(R.string.detail_episodes_failed),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                     title.seasons.forEach { season ->
                         Text(
                             season.title ?: stringResource(R.string.detail_season_number, season.seasonNumber),

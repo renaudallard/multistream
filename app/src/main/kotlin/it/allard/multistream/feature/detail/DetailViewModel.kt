@@ -35,6 +35,7 @@ class DetailViewModel(
         val watched: Set<EpisodeCoord> = emptySet(),
         val status: WatchStatus? = null,
         val inWatchlist: Boolean = false,
+        val episodesFailed: Boolean = false,
         val message: String? = null,
     ) {
         val nextEpisode: EpisodeCoord?
@@ -46,8 +47,8 @@ class DetailViewModel(
 
     init {
         viewModelScope.launch {
-            val title = interactor.loadDetails(key)
-            _state.update { it.copy(loading = false, title = title) }
+            val details = interactor.loadDetails(key)
+            _state.update { it.copy(loading = false, title = details?.title, episodesFailed = details?.episodesFailed == true) }
         }
         viewModelScope.launch {
             watchRepository.observeWatchedEpisodes(key).collect { episodes ->

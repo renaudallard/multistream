@@ -57,7 +57,7 @@ class RtlProvider(
         runCatchingExceptCancellation { api.getDetails(ref.providerTitleId, ref) }.getOrNull()
 
     override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> =
-        runCatchingExceptCancellation { api.getSeasons(ref.providerTitleId) }.getOrDefault(emptyList())
+        api.getSeasons(ref.providerTitleId)
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
         val url = ref.deepLinkHint ?: return Launcher.launchApp(context, packageName)

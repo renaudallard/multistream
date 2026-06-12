@@ -91,7 +91,7 @@ class ToutvProvider(
         runCatchingExceptCancellation { api.getDetails(ref.providerTitleId, ref) }.getOrNull()
 
     override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> =
-        runCatchingExceptCancellation { api.getSeasons(ref.providerTitleId) }.getOrDefault(emptyList())
+        api.getSeasons(ref.providerTitleId)
 
     override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> {
         val token = config.secrets.token ?: return emptyList()

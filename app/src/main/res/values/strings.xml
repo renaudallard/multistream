@@ -17,6 +17,7 @@
     <string name="search_no_matches">No catalog matches yet.</string>
     <string name="search_direct_in">Search directly in:</string>
     <string name="search_providers_failed">No response from: %1$s</string>
+    <string name="detail_episodes_failed">The episode list could not be loaded.</string>
     <string name="search_opens_in_app">Opens in-app search</string>
     <string name="search_opens_app">Opens the app</string>
 

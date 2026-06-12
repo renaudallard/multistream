@@ -124,11 +124,15 @@ class SearchInteractor(
     /** Resolve a title from the sample catalog or the last search results. */
     suspend fun getTitle(key: TitleKey): Title? = SampleCatalog.byKey(key) ?: index[key.serialize()]
 
+    /** A resolved title plus whether the episode listing failed (vs the title having none). */
+    data class TitleDetails(val title: Title, val episodesFailed: Boolean = false)
+
     /**
      * Resolve a title and enrich it from the providers: synopsis/cast/date from the best
      * detail-capable provider, and (for a series with none) its seasons from the best episode provider.
      */
-    suspend fun loadDetails(key: TitleKey): Title? = withContext(Dispatchers.IO) {
+    suspend fun loadDetails(key: TitleKey): TitleDetails? = withContext(Dispatchers.IO) {
+        var episodesFailed = false
         var title = getTitle(key) ?: return@withContext null
         if (title.synopsis == null || title.cast.isEmpty()) {
             title.detailProvider()?.let { (provider, ref) ->
@@ -150,13 +154,16 @@ class SearchInteractor(
             // results: a provider with the full run fills the gaps of one that only carries part of it.
             val perProvider = coroutineScope {
                 title.episodeProviders().map { (provider, ref) ->
-                    async { orDefault(emptyList<Season>()) { provider.getSeasons(ref, configFor(provider, ref)) } }
+                    async { orDefault(null) { provider.getSeasons(ref, configFor(provider, ref)) } }
                 }.awaitAll()
             }
-            val merged = mergeSeasons(perProvider)
+            // All providers erroring is a failed listing; an empty but successful one means the
+            // title genuinely has no enumerable episodes, so no warning is warranted.
+            episodesFailed = perProvider.isNotEmpty() && perProvider.all { it == null }
+            val merged = mergeSeasons(perProvider.filterNotNull())
             if (merged.isNotEmpty()) title = title.copy(seasons = merged)
         }
-        title
+        TitleDetails(title, episodesFailed)
     }
 
     private fun Title.detailProvider(): Pair<StreamingProvider, ProviderRef>? =

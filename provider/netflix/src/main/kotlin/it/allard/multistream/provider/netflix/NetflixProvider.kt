@@ -63,7 +63,7 @@ class NetflixProvider(
     override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> {
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
         val cookie = cookies ?: return emptyList()
-        return runCatchingExceptCancellation { api.getSeasons(ref.providerTitleId, cookie) }.getOrDefault(emptyList())
+        return api.getSeasons(ref.providerTitleId, cookie)
     }
 
     override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? {
