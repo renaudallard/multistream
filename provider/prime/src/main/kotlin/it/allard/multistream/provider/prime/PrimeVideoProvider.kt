@@ -60,16 +60,8 @@ class PrimeVideoProvider(
         return if (cookies != null) SessionState.Ready else SessionState.NeedsLogin("Prime Video login required")
     }
 
-    override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
-        if (ensureSession(config) !is SessionState.Ready) return emptyList()
-        val cookie = cookies ?: return emptyList()
-        return try {
-            api.search(query, cookie, region)
-        } catch (e: PrimeApiException) {
-            if (e.authError) dropSession(config)
-            emptyList()
-        }
-    }
+    override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
+        withSession(config) { cookie -> api.search(query, cookie, region) }
 
     override fun browsableGenres(): Set<Genre> = GENRE_KEYWORDS.keys
 
@@ -77,32 +69,21 @@ class PrimeVideoProvider(
     // an English genre keyword (Amazon localizes the results to the member's catalog) and queries search.
     override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         val keyword = GENRE_KEYWORDS[genre] ?: return emptyList()
-        if (ensureSession(config) !is SessionState.Ready) return emptyList()
-        val cookie = cookies ?: return emptyList()
-        return try {
-            api.browseGenre(keyword, cookie, region)
-        } catch (e: PrimeApiException) {
-            if (e.authError) dropSession(config)
-            emptyList()
-        }
+        return withSession(config) { cookie -> api.browseGenre(keyword, cookie, region) }
     }
 
-    override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> {
-        if (ensureSession(config) !is SessionState.Ready) return emptyList()
-        val cookie = cookies ?: return emptyList()
-        return try {
-            api.getSeasons(ref.providerTitleId, cookie)
-        } catch (e: PrimeApiException) {
-            if (e.authError) dropSession(config)
-            emptyList()
-        }
-    }
+    override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> =
+        withSession(config) { cookie -> api.getSeasons(ref.providerTitleId, cookie) }
 
-    override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> {
+    override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> =
+        withSession(config) { cookie -> api.fetchWatchedEpisodes(ref.providerTitleId, cookie) }
+
+    /** Run [block] with the session cookie; empty without one, and drop the session on an auth error. */
+    private suspend fun <T> withSession(config: ProviderConfig, block: suspend (String) -> List<T>): List<T> {
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
         val cookie = cookies ?: return emptyList()
         return try {
-            api.fetchWatchedEpisodes(ref.providerTitleId, cookie)
+            block(cookie)
         } catch (e: PrimeApiException) {
             if (e.authError) dropSession(config)
             emptyList()
