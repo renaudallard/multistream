@@ -26,6 +26,7 @@ data class UpdateInfo(val version: String, val apkUrl: String)
 class UpdateChecker(
     private val currentVersion: String,
     private val latestReleaseUrl: String = LATEST_RELEASE_URL,
+    private val now: () -> Long = System::currentTimeMillis,
 ) {
 
     private val client = buildClient()
@@ -41,12 +42,19 @@ class UpdateChecker(
      * [update] null so the next call retries; once an update is found it is published and the API is
      * left alone. A config-change recreation re-triggers it but finds the result already cached.
      */
+    // When the last API call was made; checks within MIN_INTERVAL_MS of it are skipped so the
+    // resume/search triggers stay polite to the API however often they fire.
+    @Volatile
+    private var lastAttemptMs = -MIN_INTERVAL_MS // so the first check is never throttled
+
     suspend fun refresh() {
         if (_update.value != null) return
         // tryLock so overlapping triggers (launch + rapid searches) don't pile up redundant calls.
         if (!mutex.tryLock()) return
         try {
-            if (_update.value == null) _update.value = fetchLatest()
+            if (_update.value != null || now() - lastAttemptMs < MIN_INTERVAL_MS) return
+            lastAttemptMs = now()
+            _update.value = fetchLatest()
         } finally {
             mutex.unlock()
         }
@@ -76,6 +84,9 @@ class UpdateChecker(
     }.getOrNull()
 
     private companion object {
+        // Short enough that a search shortly after a failed launch check still retries, long enough
+        // to absorb rapid triggers; GitHub caches the payload for about this long anyway.
+        const val MIN_INTERVAL_MS = 60_000L
         const val REPO = "renaudallard/multistream"
         const val LATEST_RELEASE_URL = "https://api.github.com/repos/" + REPO + "/releases/latest"
         const val USER_AGENT = "multistream-app"

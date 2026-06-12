@@ -19,9 +19,11 @@ class UpdateCheckerTest {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setResponseCode(500))
             server.enqueue(MockResponse().setBody(release))
-            val checker = UpdateChecker("0.2.6", server.url("/latest").toString())
+            var clock = 0L
+            val checker = UpdateChecker("0.2.6", server.url("/latest").toString(), now = { clock })
             checker.refresh()
             assertNull(checker.update.value)
+            clock += 61_000
             checker.refresh()
             assertEquals("9.9.9", checker.update.value?.version)
         }
@@ -32,8 +34,10 @@ class UpdateCheckerTest {
             // First check: current release, no update; second check: 304 against the stored ETag.
             server.enqueue(MockResponse().setBody("""{"tag_name":"v0.2.6","assets":[]}""").setHeader("ETag", "\"abc\""))
             server.enqueue(MockResponse().setResponseCode(304))
-            val checker = UpdateChecker("0.2.6", server.url("/latest").toString())
+            var clock = 0L
+            val checker = UpdateChecker("0.2.6", server.url("/latest").toString(), now = { clock })
             checker.refresh()
+            clock += 61_000
             checker.refresh()
             assertNull(checker.update.value)
             assertNull(server.takeRequest().getHeader("If-None-Match"))
@@ -44,8 +48,10 @@ class UpdateCheckerTest {
     @Test fun foundUpdateStopsFurtherChecks() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody(release))
-            val checker = UpdateChecker("0.2.6", server.url("/latest").toString())
+            var clock = 0L
+            val checker = UpdateChecker("0.2.6", server.url("/latest").toString(), now = { clock })
             checker.refresh()
+            clock += 61_000
             checker.refresh()
             assertEquals("9.9.9", checker.update.value?.version)
             assertEquals(1, server.requestCount)
