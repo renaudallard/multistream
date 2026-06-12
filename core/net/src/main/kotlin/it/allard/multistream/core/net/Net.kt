@@ -50,8 +50,18 @@ class InMemoryCookieJar : CookieJar {
         }
     }
 
-    override fun loadForRequest(url: HttpUrl): List<Cookie> =
-        store[url.host]?.let { synchronized(it) { it.toList() } } ?: emptyList()
+    // Expired cookies are dropped instead of being sent forever: a lapsed session cookie attached
+    // to every request would keep the server rejecting the session with no way to recover until
+    // the process restarts. Session cookies (no Expires/Max-Age) carry a far-future expiresAt.
+    override fun loadForRequest(url: HttpUrl): List<Cookie> {
+        val now = System.currentTimeMillis()
+        return store[url.host]?.let { list ->
+            synchronized(list) {
+                list.removeAll { it.expiresAt < now }
+                list.toList()
+            }
+        } ?: emptyList()
+    }
 
     /** Seed from a request-style "n=v; n=v" cookie header captured elsewhere (e.g. at login). */
     fun seed(url: HttpUrl, cookieHeader: String) {
