@@ -127,6 +127,9 @@ class WebLoginActivity : ComponentActivity() {
         webView.clearCache(true)
         webView.clearHistory()
         cookieManager.removeAllCookies {
+            // The clear is async; the user may have backed out before it finished, and the WebView
+            // must not be touched after onDestroy has destroyed it.
+            if (isDestroyed || isFinishing) return@removeAllCookies
             cookieManager.setAcceptCookie(true)
             webView.loadUrl(url)
         }
