@@ -52,6 +52,7 @@
     <string name="detail_sync_watched">Sync watched from %1$s</string>
     <string name="detail_import_done">Imported %1$d watched episodes</string>
     <string name="detail_import_none">No watched episodes found</string>
+    <string name="detail_import_failed">Couldn\'t read watched episodes, check your login</string>
 
     <!-- Settings: login -->
     <string name="settings_logged_in">Logged in ✓</string>

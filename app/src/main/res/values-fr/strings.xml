@@ -52,6 +52,7 @@
     <string name="detail_sync_watched">Synchroniser les épisodes vus depuis %1$s</string>
     <string name="detail_import_done">%1$d épisodes vus importés</string>
     <string name="detail_import_none">Aucun épisode vu trouvé</string>
+    <string name="detail_import_failed">Impossible de lire les épisodes vus, vérifiez votre connexion</string>
 
     <!-- Settings: login -->
     <string name="settings_logged_in">Connecté ✓</string>

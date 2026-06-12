@@ -74,11 +74,11 @@ class DetailViewModel(
         val title = _state.value.title ?: return
         viewModelScope.launch {
             val coords = interactor.fetchWatched(key)
-            coords.forEach { watchRepository.setEpisodeWatched(title, it, true) }
-            val message = if (coords.isEmpty()) {
-                appContext.getString(R.string.detail_import_none)
-            } else {
-                appContext.getString(R.string.detail_import_done, coords.size)
+            coords?.forEach { watchRepository.setEpisodeWatched(title, it, true) }
+            val message = when {
+                coords == null -> appContext.getString(R.string.detail_import_failed)
+                coords.isEmpty() -> appContext.getString(R.string.detail_import_none)
+                else -> appContext.getString(R.string.detail_import_done, coords.size)
             }
             _state.update { it.copy(message = message) }
         }

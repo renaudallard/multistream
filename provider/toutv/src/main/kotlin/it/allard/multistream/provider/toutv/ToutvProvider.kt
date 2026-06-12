@@ -95,7 +95,9 @@ class ToutvProvider(
 
     override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> {
         val token = config.secrets.token ?: return emptyList()
-        return runCatchingExceptCancellation { api.fetchWatchedEpisodes(ref.providerTitleId, token) }.getOrDefault(emptyList())
+        // Let failures (an expired access token answers 401) propagate so the import reports an
+        // error instead of silently importing nothing.
+        return api.fetchWatchedEpisodes(ref.providerTitleId, token)
     }
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {

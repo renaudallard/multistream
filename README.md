@@ -114,7 +114,9 @@ Netflix, Plex, Prime Video and Disney+. Prime reads each episode's playback prog
 season; Disney+ collects every episode's id and batches them through its userState lookup, since its
 catalog carries no inline progress. ICI Tou.tv (after the optional login) is limited by Radio-Canada's
 API, which exposes only a continue-watching resume point per show, so it marks the current season up
-to where you left off rather than a full history.
+to where you left off rather than a full history. A sync that fails (network error, expired session,
+e.g. Tou.tv's access token lapses after about an hour) is reported as such instead of pretending you
+have watched nothing.
 
 ## Login
 

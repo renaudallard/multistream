@@ -179,11 +179,15 @@ class SearchInteractor(
         availabilities.firstOrNull { registry.get(it.provider)?.capabilities?.canFetchWatchState == true }
             ?.let { a -> registry.get(a.provider)?.let { it to a.ref } }
 
-    /** The episodes the user has already watched on a capable provider (Netflix), for importing. */
-    suspend fun fetchWatched(key: TitleKey): List<EpisodeCoord> = withContext(Dispatchers.IO) {
+    /**
+     * The episodes the user has already watched on a capable provider (Netflix), for importing.
+     * Null when the provider call failed (network, expired session), so the UI can report a failed
+     * import instead of presenting it as "nothing watched".
+     */
+    suspend fun fetchWatched(key: TitleKey): List<EpisodeCoord>? = withContext(Dispatchers.IO) {
         val (provider, ref) = (getTitle(key) ?: return@withContext emptyList()).watchStateProvider()
             ?: return@withContext emptyList()
-        orDefault(emptyList()) { provider.fetchWatchedEpisodes(ref, configFor(provider, ref)) }
+        orDefault(null) { provider.fetchWatchedEpisodes(ref, configFor(provider, ref)) }
     }
 
     private suspend fun configFor(provider: StreamingProvider, ref: ProviderRef): ProviderConfig {

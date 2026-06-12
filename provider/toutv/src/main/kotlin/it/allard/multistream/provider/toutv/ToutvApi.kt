@@ -75,7 +75,11 @@ class ToutvApi(
         return (1..lastWatched).map { EpisodeCoord(resume.season, it) }
     }
 
-    /** GET a member endpoint with the Bearer token; null on a non-2xx or transport/parse error. */
+    /**
+     * GET a member endpoint with the Bearer token. Throws on a non-2xx (the B2C access token expires
+     * after about an hour and is not refreshable, so a 401 must surface as a failed call, not as an
+     * empty result the caller can't tell apart from "nothing watched") and on transport errors.
+     */
     private suspend fun getAuthedObject(url: String, token: String): JsonObject? {
         val request = Request.Builder()
             .url(url)
@@ -85,12 +89,10 @@ class ToutvApi(
             .header("Authorization", "Bearer $token")
             .get()
             .build()
-        return runCatchingExceptCancellation {
-            client.await(request).use { response ->
-                if (!response.isSuccessful) null
-                else NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
-            }
-        }.getOrNull()
+        client.await(request).use { response ->
+            if (!response.isSuccessful) throw ToutvApiException("HTTP ${response.code}")
+            return NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
+        }
     }
 
     private suspend fun getObject(url: String): JsonObject {
