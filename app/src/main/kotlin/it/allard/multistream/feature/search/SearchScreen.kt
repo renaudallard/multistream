@@ -68,7 +68,7 @@ import java.text.Normalizer
 @Composable
 fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
     val graph = LocalAppGraph.current
-    val viewModel = appViewModel { SearchViewModel(graph.searchInteractor, graph.registry, graph.launchController) }
+    val viewModel = appViewModel { SearchViewModel(graph.searchInteractor, graph.registry, graph.launchController, graph.updateChecker) }
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
 

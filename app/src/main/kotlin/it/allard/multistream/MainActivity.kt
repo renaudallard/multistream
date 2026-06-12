@@ -16,9 +16,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -46,7 +47,6 @@ import it.allard.multistream.ui.LocalFormFactor
 import it.allard.multistream.ui.detectFormFactor
 import it.allard.multistream.ui.theme.MultistreamTheme
 import it.allard.multistream.update.UpdateBanner
-import it.allard.multistream.update.UpdateInfo
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,10 +75,12 @@ fun MultistreamRoot() {
     val navController = rememberNavController()
     val tabs = listOf(Dest.Search, Dest.Library, Dest.Settings)
 
-    // Each launch, ask GitHub whether a newer release exists; a failure stays null and shows nothing.
+    // Surface a newer release as a banner. The checker is asked on launch and again on each search
+    // (see SearchViewModel) until it finds one, so a missed or offline launch check still recovers.
     val graph = LocalAppGraph.current
     val context = LocalContext.current
-    val update by produceState<UpdateInfo?>(initialValue = null) { value = graph.updateChecker.check() }
+    val update by graph.updateChecker.update.collectAsState()
+    LaunchedEffect(Unit) { graph.updateChecker.refresh() }
     var updateDismissed by rememberSaveable { mutableStateOf(false) }
 
     Scaffold(

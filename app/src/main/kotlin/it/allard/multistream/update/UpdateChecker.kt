@@ -3,8 +3,10 @@ package it.allard.multistream.update
 import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.await
 import it.allard.multistream.core.net.buildClient
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -24,20 +26,26 @@ class UpdateChecker(private val currentVersion: String) {
 
     private val client = buildClient()
     private val mutex = Mutex()
-    private var cached: UpdateInfo? = null
-    private var checked = false
+    private val _update = MutableStateFlow<UpdateInfo?>(null)
+
+    /** The newer release once one has been found, or null until then. Observed by the update banner. */
+    val update: StateFlow<UpdateInfo?> = _update.asStateFlow()
 
     /**
-     * Returns a newer release if one exists. The result is memoized for the process lifetime, so a
-     * config-change recreation (rotation, theme, locale) reuses the first answer instead of calling
-     * the API again; a fresh launch is a new process and so checks anew.
+     * Check GitHub for a newer release unless one was already found. Idempotent and cheap to call
+     * repeatedly: it runs on launch and again on each search, and a failed or empty check leaves
+     * [update] null so the next call retries; once an update is found it is published and the API is
+     * left alone. A config-change recreation re-triggers it but finds the result already cached.
      */
-    suspend fun check(): UpdateInfo? = mutex.withLock {
-        if (!checked) {
-            cached = fetchLatest()
-            checked = true
+    suspend fun refresh() {
+        if (_update.value != null) return
+        // tryLock so overlapping triggers (launch + rapid searches) don't pile up redundant calls.
+        if (!mutex.tryLock()) return
+        try {
+            if (_update.value == null) _update.value = fetchLatest()
+        } finally {
+            mutex.unlock()
         }
-        cached
     }
 
     private suspend fun fetchLatest(): UpdateInfo? = runCatching {

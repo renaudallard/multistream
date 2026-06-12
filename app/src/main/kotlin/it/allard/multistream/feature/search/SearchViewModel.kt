@@ -8,6 +8,7 @@ import it.allard.multistream.di.ProviderRegistry
 import it.allard.multistream.domain.SearchInteractor
 import it.allard.multistream.launch.LaunchController
 import it.allard.multistream.provider.api.StreamingProvider
+import it.allard.multistream.update.UpdateChecker
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +20,7 @@ class SearchViewModel(
     private val interactor: SearchInteractor,
     private val registry: ProviderRegistry,
     private val launchController: LaunchController,
+    private val updateChecker: UpdateChecker,
 ) : ViewModel() {
 
     data class UiState(
@@ -52,6 +54,8 @@ class SearchViewModel(
     fun submit() {
         val query = _state.value.query.trim()
         if (query.isEmpty()) return
+        // Each search is another chance to surface a pending app update if the launch check missed it.
+        viewModelScope.launch { updateChecker.refresh() }
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             val degrade = registry.enabled().filter { !it.capabilities.canSearch }
