@@ -34,7 +34,11 @@ object MolotovParser {
         val tiles = mutableListOf<JsonObject>()
         collect(root, tiles)
         val seen = HashSet<String>()
-        return tiles.mapNotNull { toResult(it, region) }.filter { seen.add(it.ref.providerTitleId) }
+        // Dedup by slug/id, not by the ref's title id: the same program carried on several channels
+        // shares the slug but gets a channel-scoped title id.
+        return tiles.mapNotNull { tile ->
+            toResult(tile, region)?.takeIf { seen.add(tile["slug"].string() ?: tile["id"].string() ?: "") }
+        }
     }
 
     private fun collect(element: JsonElement, out: MutableList<JsonObject>, depth: Int = 0) {
@@ -64,9 +68,20 @@ object MolotovParser {
             "program" -> if (isFilm(tile)) MediaType.MOVIE else MediaType.SERIES
             else -> MediaType.SERIES
         }
+        // A channel tile's metadata describes its current broadcast, not the tile itself, so the
+        // program/channel ids and the program deep link only apply to content tiles.
+        val metadata = tile["metadata"].obj().takeIf { media != MediaType.LIVE_CHANNEL }
+        val programId = metadata?.get("program_id").string()
+        val channelId = metadata?.get("channel_id").string()
+        // Episode listing needs the channel-scoped program view endpoint, so both ids ride in the
+        // title id when known; older slug-only refs simply cannot list episodes.
+        val titleId = if (channelId != null && programId != null) "$channelId:$programId" else id
+        // The app verifies every molotov.tv link but only routes its real paths; the canonical
+        // program page (per the site's sitemap) is /fr_fr/p/<program_id>/<slug>.
+        val deepLink = if (programId != null && slug != null) "https://www.molotov.tv/fr_fr/p/$programId/$slug" else null
         return UnifiedSearchResult(
             provider = ProviderId.MOLOTOV,
-            ref = ProviderRef(ProviderId.MOLOTOV, id, slug?.let { "https://www.molotov.tv/$it" }, region),
+            ref = ProviderRef(ProviderId.MOLOTOV, titleId, deepLink, region),
             title = title,
             type = media,
             posterUrl = posterImage(tile["image_bundle"]),

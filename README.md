@@ -153,7 +153,8 @@ the **title page** and the user presses play inside the official app.
 - **Disney+** `https://www.disneyplus.com/browse/entity-<id>`, with `disneyplus://<id>` as a fallback.
 - **Prime Video** `https://app.primevideo.com/detail?gti=<ASIN>`. The bundled APK is the TV
   ("living-room") build; on phones the mobile package `com.amazon.avod.thirdpartyclient` is tried.
-- **Molotov** `https://www.molotov.tv/<slug>` web links, carried as a deep-link hint.
+- **Molotov** `https://www.molotov.tv/fr_fr/p/<program_id>/<slug>` web links (the canonical program
+  page from the site's sitemap), carried as a deep-link hint.
 - **Zattoo** `https://zattoo.com/live/<cid>` opens the program's live channel (the app catches every
   `zattoo.com` URL; the `/live` route comes from its bundle).
 - **Arte** `https://www.arte.tv/<lang>/videos/<id>/`, with `arte://collection/<id>` as a fallback.

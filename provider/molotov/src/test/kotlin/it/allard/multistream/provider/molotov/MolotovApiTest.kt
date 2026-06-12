@@ -45,7 +45,7 @@ class MolotovApiTest {
             MockResponse().setHeader("Content-Type", "application/json").setBody(
                 """
                 {"sections":[{"title":"Results","items":[
-                  {"type":"program","id":"p1","slug":"lupin","title":"Lupin","description":"A gentleman thief seeks revenge.","image_bundle":{"poster":{"medium":{"url":"https://img/lupin.jpg"}}}},
+                  {"type":"program","id":"p1","slug":"lupin","title":"Lupin","description":"A gentleman thief seeks revenge.","metadata":{"channel_id":"3","program_id":"4242"},"image_bundle":{"poster":{"medium":{"url":"https://img/lupin.jpg"}}}},
                   {"type":"vod","id":"v9","slug":"oss117","title":"OSS 117"},
                   {"type":"person","id":"x","title":"Some Actor"}
                 ]}]}
@@ -56,7 +56,13 @@ class MolotovApiTest {
         assertEquals(2, results.size) // person is filtered out
         val lupin = results.first { it.title == "Lupin" }
         assertEquals(MediaType.SERIES, lupin.type)
-        assertEquals("https://www.molotov.tv/lupin", lupin.ref.deepLinkHint)
+        // The canonical program page; a bare /slug is not a route the app (or site) knows.
+        assertEquals("https://www.molotov.tv/fr_fr/p/4242/lupin", lupin.ref.deepLinkHint)
+        assertEquals("3:4242", lupin.ref.providerTitleId) // channel:program, for the episode list
+        // A tile without channel/program metadata keeps the slug id and gets no deep link.
+        val oss = results.first { it.title == "OSS 117" }
+        assertEquals("oss117", oss.ref.providerTitleId)
+        assertEquals(null, oss.ref.deepLinkHint)
         assertEquals("https://img/lupin.jpg", lupin.posterUrl)
         assertEquals("A gentleman thief seeks revenge.", lupin.synopsis)
         assertEquals(MediaType.MOVIE, results.first { it.title == "OSS 117" }.type)
@@ -114,7 +120,7 @@ class MolotovApiTest {
             MockResponse().setHeader("Content-Type", "application/json").setBody(
                 """
                 {"page":{},"section":{"slug":"kind_movies_1","items":[
-                  {"type":"program","id":"343524","slug":"comme-chien-et-chat","title":"Comme chien et chat","metadata":{"program_category_id":"1"}},
+                  {"type":"program","id":"343524","slug":"comme-chien-et-chat","title":"Comme chien et chat","metadata":{"program_category_id":"1","channel_id":"42","program_id":"343524"}},
                   {"type":"program","id":"6133831","slug":"le-jour","title":"Le Jour de la Colère","metadata":{"program_category_id":"1"}}
                 ]},"sidebar":{}}
                 """.trimIndent(),
