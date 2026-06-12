@@ -17,6 +17,7 @@ import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
 import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import kotlinx.coroutines.delay
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import okhttp3.FormBody
@@ -47,7 +48,7 @@ class PlexApi(
     suspend fun createPin(): PlexPin {
         // strong=true returns the long OAuth code that app.plex.tv/auth consumes from its URL.
         client.await(Request.Builder().url("$pinsUrl?strong=true").headers(headers(null)).post(FormBody.Builder().build()).build()).use { response ->
-            val root = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
+            val root = parseObject(response.body?.string().orEmpty())
             if (!response.isSuccessful || root == null) throw PlexApiException("Could not start Plex link (HTTP ${response.code})")
             val id = root["id"].int()?.toString() ?: root["id"].string() ?: throw PlexApiException("No pin id")
             val code = root["code"].string() ?: throw PlexApiException("No pin code")
@@ -113,7 +114,7 @@ class PlexApi(
     suspend fun signIn(login: String, password: String): String {
         val body = FormBody.Builder().add("login", login).add("password", password).build()
         client.await(Request.Builder().url(signinUrl).headers(headers(null)).post(body).build()).use { response ->
-            val root = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
+            val root = parseObject(response.body?.string().orEmpty())
             if (!response.isSuccessful) {
                 val message = root?.get("errors").array()?.firstOrNull()?.obj()?.get("message").string()
                 throw PlexApiException(message ?: "Sign-in failed (HTTP ${response.code})", authError = response.code == 401)
@@ -122,6 +123,18 @@ class PlexApi(
                 ?: throw PlexApiException("No Plex token returned (two-factor enabled? use a server URL + token instead)")
         }
     }
+
+    /**
+     * Parse a response body as a JSON object, or null when it is not one. Error responses can carry
+     * an empty or non-JSON body (a proxy 502 typically has none), which must surface as the HTTP
+     * error below, not as a SerializationException from the parse.
+     */
+    private fun parseObject(text: String): JsonObject? =
+        try {
+            NetJson.parseToJsonElement(text).obj()
+        } catch (e: SerializationException) {
+            null
+        }
 
     /** Confirm a Plex Media Server is reachable with the token (validates the optional login). */
     suspend fun verifyServer(serverUrl: String, token: String) {
