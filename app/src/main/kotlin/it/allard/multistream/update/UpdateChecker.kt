@@ -23,7 +23,10 @@ data class UpdateInfo(val version: String, val apkUrl: String)
  * startup or nag the user. The request goes through the shared [buildClient]/[await] net layer, which
  * caps the response body against an OOM and cancels the call together with the coroutine.
  */
-class UpdateChecker(private val currentVersion: String) {
+class UpdateChecker(
+    private val currentVersion: String,
+    private val latestReleaseUrl: String = LATEST_RELEASE_URL,
+) {
 
     private val client = buildClient()
     private val mutex = Mutex()
@@ -51,7 +54,7 @@ class UpdateChecker(private val currentVersion: String) {
 
     private suspend fun fetchLatest(): UpdateInfo? = runCatching {
         val request = Request.Builder()
-            .url(LATEST_RELEASE_URL)
+            .url(latestReleaseUrl)
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", USER_AGENT)
             .build()
