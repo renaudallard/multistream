@@ -66,7 +66,7 @@ class PrimeVideoProvider(
         return try {
             api.search(query, cookie, region)
         } catch (e: PrimeApiException) {
-            if (e.authError) cookies = null
+            if (e.authError) dropSession(config)
             emptyList()
         }
     }
@@ -82,7 +82,7 @@ class PrimeVideoProvider(
         return try {
             api.browseGenre(keyword, cookie, region)
         } catch (e: PrimeApiException) {
-            if (e.authError) cookies = null
+            if (e.authError) dropSession(config)
             emptyList()
         }
     }
@@ -93,7 +93,7 @@ class PrimeVideoProvider(
         return try {
             api.getSeasons(ref.providerTitleId, cookie)
         } catch (e: PrimeApiException) {
-            if (e.authError) cookies = null
+            if (e.authError) dropSession(config)
             emptyList()
         }
     }
@@ -104,9 +104,19 @@ class PrimeVideoProvider(
         return try {
             api.fetchWatchedEpisodes(ref.providerTitleId, cookie)
         } catch (e: PrimeApiException) {
-            if (e.authError) cookies = null
+            if (e.authError) dropSession(config)
             emptyList()
         }
+    }
+
+    /**
+     * Drop the session on an auth rejection. Clearing only the in-memory cookie is not enough:
+     * ensureSession would reload the same dead cookie from the persisted secret on the next call,
+     * so the expired session would silently return empty results forever instead of NeedsLogin.
+     */
+    private fun dropSession(config: ProviderConfig) {
+        cookies = null
+        config.persistSecrets?.invoke(ProviderSecrets.EMPTY)
     }
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
