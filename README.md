@@ -73,7 +73,7 @@ shell for phone and Android TV.
 | **Netflix** | ✅ | 8 | title page | cast, summary | WebView \* | title and in-app-search deep links; search verified on a real device, the session can need a fresh login after heavy use |
 | **Disney+** | ✅ | 10 | title page | cast, summary | email / password | verified on a real device; films and series are typed correctly, so episodes list only for series |
 | **Prime Video** | ✅ | 10 | detail page | summary | WebView \* | verified on a real device; the TV build is bundled and the mobile package is tried on phones; web-search art is 16:9 (no portrait) |
-| **Molotov** | ✅ | 9 | deep link | summary | email / password | verified on a real device; rich title and program deep links; its API carries no cast |
+| **Molotov** | ✅ | 9 | program page | summary | email / password | verified on a real device; lists episodes from the channel-scoped program page; its API carries no cast |
 | **Zattoo** | ✅ | — | live channel | — | email / password | live TV: deep-links to the program's live channel (`zattoo.com/live/<cid>`); the guide carries no synopsis |
 | **Arte** | ✅ | 2 | title page | summary | optional | free public API; the region selects the catalog language |
 | **Plex** | ✅ | 10 † | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
@@ -106,7 +106,8 @@ sample catalog also ships for an offline demo; live search itself runs only on a
 Opening a series fetches its episodes from every provider that can enumerate them and unions them by
 season and episode number, so a service carrying the full run completes one that holds only part of
 it. Plex lists episodes from your own server; Prime Video reads them from the signed-in detail page,
-fetching one page per season so every season is covered.
+fetching one page per season so every season is covered; Molotov reads them from the channel-scoped
+program page its search tiles point to.
 
 Where a service exposes it, the detail screen also offers "Sync watched from <service>", which
 imports which episodes you have already watched there into your local history. This is verified for

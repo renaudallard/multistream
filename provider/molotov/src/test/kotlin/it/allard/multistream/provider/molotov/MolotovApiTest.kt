@@ -130,7 +130,52 @@ class MolotovApiTest {
         assertEquals(2, results.size)
         val film = results.first { it.title == "Comme chien et chat" }
         assertEquals(MediaType.MOVIE, film.type) // a program in the Films category is a movie
-        assertEquals("https://www.molotov.tv/comme-chien-et-chat", film.ref.deepLinkHint)
+        assertEquals("https://www.molotov.tv/fr_fr/p/343524/comme-chien-et-chat", film.ref.deepLinkHint)
         assertTrue(server.takeRequest().path!!.contains("/v2/categories/1/sections/kind_movies_1"))
+    }
+
+    @Test fun getSeasons_groupsEpisodesBySeason_andSkipsOtherPrograms() = runBlocking {
+        // Episode tiles carry season/episode coordinates as strings in metadata (real payload shape);
+        // recommendation tiles for other programs are stamped with their own program_id.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"sections":[{"slug":"episodes","items":[
+                  {"type":"program","title":"Les as de la jungle","subtitle_formatter":{"format":"S03E47 - La fugitive"},
+                   "metadata":{"channel_id":"18","program_id":"19460","season_number":"3","episode_number":"47","episode_title":"La fugitive"}},
+                  {"type":"program","title":"Les as de la jungle","subtitle_formatter":{"format":"S03E46 - Le retour"},
+                   "metadata":{"channel_id":"18","program_id":"19460","season_number":"3","episode_number":"46","episode_title":"Le retour"}},
+                  {"type":"program","title":"Les as de la jungle","subtitle_formatter":{"format":"S01E01 - Origines"},
+                   "metadata":{"channel_id":"18","program_id":"19460","season_number":"1","episode_number":"1"}},
+                  {"type":"program","title":"Autre programme",
+                   "metadata":{"channel_id":"18","program_id":"99999","season_number":"1","episode_number":"5","episode_title":"Pas le bon"}}
+                ]}]}
+                """.trimIndent(),
+            ),
+        )
+        val seasons = api.getSeasons("18", "19460", "AT")
+        assertEquals(listOf(1, 3), seasons.map { it.seasonNumber })
+        assertEquals(listOf(46, 47), seasons.last().episodes.map { it.episodeNumber })
+        assertEquals("La fugitive", seasons.last().episodes.last().title)
+        assertEquals("Origines", seasons.first().episodes.first().title) // from the SxxEyy subtitle
+        assertTrue(server.takeRequest().path!!.contains("/v2/channels/18/programs/19460/view"))
+    }
+
+    @Test fun getSeasons_fallsBackToSubtitleCoordinates() = runBlocking {
+        // Coordinates can be absent from metadata; the "SxxEyy" subtitle then provides them.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"sections":[{"items":[
+                  {"type":"program","title":"X","subtitle_formatter":{"format":"S02E03 - Plume-baguette"},
+                   "metadata":{"program_id":"7","episode_number":"3"}}
+                ]}]}
+                """.trimIndent(),
+            ),
+        )
+        val seasons = api.getSeasons("1", "7", "AT")
+        assertEquals(1, seasons.size)
+        assertEquals(2, seasons.first().seasonNumber)
+        assertEquals("Plume-baguette", seasons.first().episodes.single().title)
     }
 }

@@ -8,6 +8,7 @@ import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.Launcher
 import it.allard.multistream.provider.api.ProviderCapabilities
@@ -31,6 +32,7 @@ class MolotovProvider(
     override val capabilities = ProviderCapabilities(
         canSearch = true,
         canBrowseByGenre = true,
+        canListEpisodes = true,
         canDeepLinkToTitle = true,
         isLiveTv = true,
         requiresRegion = true,
@@ -87,6 +89,24 @@ class MolotovProvider(
     private suspend fun retryAfterAuth(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         val fresh = refreshSession(config, accessToken) ?: return emptyList()
         return runCatchingExceptCancellation { api.search(query, fresh, region) }.getOrDefault(emptyList())
+    }
+
+    override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> {
+        if (ensureSession(config) !is SessionState.Ready) return emptyList()
+        val token = accessToken ?: return emptyList()
+        // The episode endpoint is channel-scoped; the parser stamps refs with "channel:program" when
+        // the tile metadata carries both ids. A slug-only ref (older cache, or a tile without channel
+        // metadata) cannot list episodes.
+        val parts = ref.providerTitleId.split(':')
+        if (parts.size != 2) return emptyList()
+        val (channelId, programId) = parts
+        return try {
+            api.getSeasons(channelId, programId, token)
+        } catch (e: MolotovApiException) {
+            if (!e.authError) throw e
+            val fresh = refreshSession(config, token) ?: return emptyList()
+            runCatchingExceptCancellation { api.getSeasons(channelId, programId, fresh) }.getOrDefault(emptyList())
+        }
     }
 
     /** Refresh the session once, persisting the rotated token. Returns the new access token or null. */

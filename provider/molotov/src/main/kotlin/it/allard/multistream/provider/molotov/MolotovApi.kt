@@ -1,6 +1,7 @@
 package it.allard.multistream.provider.molotov
 
 import it.allard.multistream.core.model.Region
+import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.NetJson
 import it.allard.multistream.core.net.await
@@ -60,6 +61,15 @@ class MolotovApi(
     suspend fun browseByKind(kindSlug: String, accessToken: String, region: Region): List<UnifiedSearchResult> {
         val root = execElement(get("v2/categories/1/sections/$kindSlug?limit=$BROWSE_LIMIT", token = accessToken))
         return MolotovParser.parse(root, region)
+    }
+
+    /**
+     * Seasons and episodes of a program, from its channel-scoped view page (the same navigation
+     * endpoint the official app's program tiles point to).
+     */
+    suspend fun getSeasons(channelId: String, programId: String, accessToken: String): List<Season> {
+        val root = execElement(get("v2/channels/$channelId/programs/$programId/view", token = accessToken))
+        return MolotovParser.parseSeasons(root, programId)
     }
 
     private fun tokensFrom(root: JsonObject): MolotovTokens? {
