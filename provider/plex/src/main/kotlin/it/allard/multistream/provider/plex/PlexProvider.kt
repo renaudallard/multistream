@@ -65,8 +65,10 @@ class PlexProvider(
             awaitToken = {
                 api.pollPin(pin.id, pin.code)?.let { account ->
                     accountToken = account
-                    // Auto-discover the member's own server from the linked account token.
-                    val connection = api.connectServer(account)
+                    // Auto-discover the member's own server from the linked account token. A transient
+                    // failure here must not throw away the already-granted token: fall back to a
+                    // Discover-only link, exactly as if the account owned no reachable server.
+                    val connection = runCatchingExceptCancellation { api.connectServer(account) }.getOrNull()
                     server = connection?.first
                     token = connection?.second ?: account
                     ProviderSecrets(
