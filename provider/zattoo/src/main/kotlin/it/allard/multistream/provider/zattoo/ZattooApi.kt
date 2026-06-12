@@ -13,6 +13,7 @@ import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.UUID
@@ -25,10 +26,12 @@ class ZattooApiException(message: String, val authError: Boolean = false) : Exce
  * Session is cookie-based (held by the client's cookie jar). Pure Kotlin, MockWebServer-testable.
  */
 class ZattooApi(
-    private val client: OkHttpClient = buildClient(InMemoryCookieJar()),
+    private val cookieJar: InMemoryCookieJar = InMemoryCookieJar(),
+    private val client: OkHttpClient = buildClient(cookieJar),
     baseUrl: String = "https://zattoo.com",
 ) {
     private val base = baseUrl.removeSuffix("/")
+    private val baseHttpUrl = base.toHttpUrl()
 
     @Volatile
     var powerHash: String? = null
@@ -43,6 +46,28 @@ class ZattooApi(
     fun invalidateSession() {
         loggedIn = false
         powerHash = null
+        cookieJar.clear()
+    }
+
+    /** The current zapi session cookies, for persisting so a fresh process can resume the session. */
+    fun exportSession(): String = cookieJar.export(baseHttpUrl)
+
+    /**
+     * Try to resume a previous session from its persisted cookies: seed the jar and ask zapi for the
+     * session state. True when the server still considers it logged in (and supplies the power guide
+     * hash); false means the cookies are dead and a credential login is needed.
+     */
+    suspend fun resumeSession(cookieHeader: String): Boolean {
+        if (cookieHeader.isBlank()) return false
+        cookieJar.seed(baseHttpUrl, cookieHeader)
+        val response = runCatchingExceptCancellation { execObject(get("$base/zapi/v2/session")) }.getOrNull()
+            ?: return false
+        val session = response["session"].obj()
+        val hash = session?.get("power_guide_hash").string()
+        if (session?.get("loggedin").bool() != true || hash == null) return false
+        powerHash = hash
+        loggedIn = true
+        return true
     }
 
     suspend fun login(email: String, password: String) {

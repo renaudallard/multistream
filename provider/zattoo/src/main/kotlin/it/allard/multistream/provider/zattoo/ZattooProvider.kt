@@ -41,7 +41,9 @@ class ZattooProvider(
 
     override suspend fun login(username: String, password: String): ProviderSecrets {
         api.login(username, password)
-        return ProviderSecrets(extra = mapOf("email" to username, "password" to password))
+        // The session cookie is persisted alongside the credentials so a fresh process resumes the
+        // live session; the password stays only as the fallback once the cookie session expires.
+        return ProviderSecrets(cookie = api.exportSession(), extra = mapOf("email" to username, "password" to password))
     }
 
     override suspend fun ensureSession(config: ProviderConfig): SessionState {
@@ -49,11 +51,24 @@ class ZattooProvider(
         return sessionMutex.withLock {
             // Re-check inside the lock so concurrent callers don't each start a fresh login.
             if (api.isLoggedIn()) return@withLock SessionState.Ready
+            val cookie = config.secrets.cookie
+            if (cookie != null && runCatchingExceptCancellation { api.resumeSession(cookie) }.getOrDefault(false)) {
+                return@withLock SessionState.Ready
+            }
             val email = config.secrets.extra["email"]
             val password = config.secrets.extra["password"]
             if (email != null && password != null) {
                 runCatchingExceptCancellation { api.login(email, password) }
-                    .fold({ SessionState.Ready }, { SessionState.NeedsLogin(it.message ?: "Login failed") })
+                    .fold(
+                        {
+                            // Persist the rotated session cookie so the next process resumes it too.
+                            config.persistSecrets?.invoke(
+                                ProviderSecrets(cookie = api.exportSession(), extra = config.secrets.extra),
+                            )
+                            SessionState.Ready
+                        },
+                        { SessionState.NeedsLogin(it.message ?: "Login failed") },
+                    )
             } else {
                 SessionState.NeedsLogin("Zattoo login required")
             }

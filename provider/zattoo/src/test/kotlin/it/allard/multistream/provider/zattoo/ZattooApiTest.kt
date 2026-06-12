@@ -9,6 +9,7 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -20,7 +21,8 @@ class ZattooApiTest {
     @Before fun setUp() {
         server = MockWebServer()
         server.start()
-        api = ZattooApi(client = buildClient(InMemoryCookieJar()), baseUrl = server.url("/").toString())
+        val jar = InMemoryCookieJar()
+        api = ZattooApi(cookieJar = jar, client = buildClient(jar), baseUrl = server.url("/").toString())
     }
 
     @After fun tearDown() = server.shutdown()
@@ -64,5 +66,25 @@ class ZattooApiTest {
         // token.json fetched the app token; hello carried it
         assertTrue(server.takeRequest().path!!.contains("/token.json"))
         assertTrue(server.takeRequest().body.readUtf8().contains("client_app_token=APPTOKEN"))
+    }
+
+    @Test fun resumeSession_acceptsLiveCookieSession() = runBlocking {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"success":true,"session":{"loggedin":true,"power_guide_hash":"PH2"}}"""),
+        )
+        assertTrue(api.resumeSession("pzuid=abc"))
+        assertTrue(api.isLoggedIn())
+        assertEquals("PH2", api.powerHash)
+        assertEquals("pzuid=abc", server.takeRequest().getHeader("Cookie"))
+    }
+
+    @Test fun resumeSession_rejectsDeadCookieSession() = runBlocking {
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json")
+                .setBody("""{"success":true,"session":{"loggedin":false}}"""),
+        )
+        assertFalse(api.resumeSession("pzuid=dead"))
+        assertFalse(api.isLoggedIn())
     }
 }
