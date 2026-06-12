@@ -14,6 +14,7 @@ import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
 import it.allard.multistream.provider.api.WebLoginSpec
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
 
 /**
  * Play RTS (Swiss French public TV, SRG SSR). Search is anonymous via the Integration Layer and works
@@ -43,7 +44,7 @@ class RtsProvider(
     // it backs DRAMA as a best-effort (it is broader than drama alone).
     override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         val topicUrn = GENRE_TOPICS[genre] ?: return emptyList()
-        return runCatching { api.browseByTopic(topicUrn) }.getOrDefault(emptyList())
+        return runCatchingExceptCancellation { api.browseByTopic(topicUrn) }.getOrDefault(emptyList())
     }
 
     override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
@@ -57,7 +58,7 @@ class RtsProvider(
         ProviderSecrets(cookie = cookies)
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
-        runCatching { api.search(query, config.secrets.cookie) }.getOrDefault(emptyList())
+        runCatchingExceptCancellation { api.search(query, config.secrets.cookie) }.getOrDefault(emptyList())
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
         val url = ref.deepLinkHint ?: return Launcher.launchApp(context, packageName)

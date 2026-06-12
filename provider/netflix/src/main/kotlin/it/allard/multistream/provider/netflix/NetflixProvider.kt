@@ -18,6 +18,7 @@ import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.SessionState
 import it.allard.multistream.provider.api.StreamingProvider
 import it.allard.multistream.provider.api.WebLoginSpec
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
 
 /**
  * Netflix. The app API is MSL-locked, so search uses the web Shakti API with cookies captured by a
@@ -62,7 +63,7 @@ class NetflixProvider(
     override suspend fun getSeasons(ref: ProviderRef, config: ProviderConfig): List<Season> {
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
         val cookie = cookies ?: return emptyList()
-        return runCatching { api.getSeasons(ref.providerTitleId, cookie) }.getOrDefault(emptyList())
+        return runCatchingExceptCancellation { api.getSeasons(ref.providerTitleId, cookie) }.getOrDefault(emptyList())
     }
 
     override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? {

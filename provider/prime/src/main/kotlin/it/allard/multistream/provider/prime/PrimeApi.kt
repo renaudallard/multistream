@@ -8,6 +8,7 @@ import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.model.normalizeTitle
 import it.allard.multistream.core.net.await
 import it.allard.multistream.core.net.buildClient
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -136,7 +137,7 @@ class PrimeApi(
             .header("User-Agent", USER_AGENT)
             .get()
             .build()
-        return runCatching {
+        return runCatchingExceptCancellation {
             client.await(request).use { response ->
                 if (!response.isSuccessful) return@use null
                 response.body?.string()

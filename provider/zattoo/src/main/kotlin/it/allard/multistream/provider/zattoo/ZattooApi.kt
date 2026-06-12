@@ -9,6 +9,7 @@ import it.allard.multistream.core.net.bool
 import it.allard.multistream.core.net.buildClient
 import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import okhttp3.FormBody
@@ -86,7 +87,7 @@ class ZattooApi(
     private suspend fun loadAppToken(): String {
         // Modern Zattoo serves the app token as JSON at /token.json; fall back to the legacy
         // window.appToken HTML marker (still used by some reseller portals).
-        runCatching { execObject(get("$base/token.json"))["session_token"].string() }.getOrNull()
+        runCatchingExceptCancellation { execObject(get("$base/token.json"))["session_token"].string() }.getOrNull()
             ?.let { return it }
         client.await(get("$base/")).use { response ->
             val html = response.body?.string().orEmpty()

@@ -14,6 +14,7 @@ import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
 import it.allard.multistream.provider.api.WebLoginSpec
+import it.allard.multistream.provider.api.runCatchingExceptCancellation
 
 /**
  * RTBF Auvio (free Belgian French public TV). Search is anonymous and works without login; the
@@ -43,7 +44,7 @@ class RtbfProvider(
     // map cleanly to a canonical genre are exposed (documentaries and Japanese animation).
     override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         val category = GENRE_CATEGORIES[genre] ?: return emptyList()
-        return runCatching { api.browseCategory(category) }.getOrDefault(emptyList())
+        return runCatchingExceptCancellation { api.browseCategory(category) }.getOrDefault(emptyList())
     }
 
     override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
@@ -57,7 +58,7 @@ class RtbfProvider(
         ProviderSecrets(cookie = cookies)
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
-        runCatching { api.search(query, config.secrets.cookie) }.getOrDefault(emptyList())
+        runCatchingExceptCancellation { api.search(query, config.secrets.cookie) }.getOrDefault(emptyList())
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
         val url = ref.deepLinkHint ?: return Launcher.launchApp(context, packageName)

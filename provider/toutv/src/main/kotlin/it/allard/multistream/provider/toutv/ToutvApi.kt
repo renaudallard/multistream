@@ -85,7 +85,7 @@ class ToutvApi(
             .header("Authorization", "Bearer $token")
             .get()
             .build()
-        return runCatching {
+        return runCatchingExceptCancellation {
             client.await(request).use { response ->
                 if (!response.isSuccessful) null
                 else NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()
