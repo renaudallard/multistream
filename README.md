@@ -51,6 +51,8 @@ and tracks. There is no DI framework. A small hand-written `AppGraph` wires ever
 the providers into a registry, so one flaky provider never breaks the app. Search fans out to every
 enabled provider in parallel, merges the rows into one card per title across services, and ranks the
 list by how closely each title matches the query (a full-phrase match before partial-word ones).
+A provider that errors or times out during the search is named under the results ("No response
+from: ..."), so missing rows are visible instead of looking like catalog misses.
 Opening a series lists its episodes by asking every provider that can enumerate them and unioning the
 results, so a service carrying the full run completes one that holds only part of it.
 

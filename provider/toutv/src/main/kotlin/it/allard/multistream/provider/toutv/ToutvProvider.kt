@@ -48,7 +48,7 @@ class ToutvProvider(
 
     override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         val slug = GENRE_SLUGS[genre] ?: return emptyList()
-        return runCatchingExceptCancellation { api.browseByGenre(slug) }.getOrDefault(emptyList())
+        return api.browseByGenre(slug)
     }
 
     override fun supportedRegions(): Set<Region> = setOf(Region("CA"))
@@ -85,7 +85,7 @@ class ToutvProvider(
     }
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
-        runCatchingExceptCancellation { api.search(query) }.getOrDefault(emptyList())
+        api.search(query)
 
     override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? =
         runCatchingExceptCancellation { api.getDetails(ref.providerTitleId, ref) }.getOrNull()

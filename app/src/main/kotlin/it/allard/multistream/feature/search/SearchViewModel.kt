@@ -31,6 +31,7 @@ class SearchViewModel(
         val genres: List<Genre> = emptyList(),
         val results: List<Title> = emptyList(),
         val degrade: List<StreamingProvider> = emptyList(),
+        val failed: List<String> = emptyList(),
         val message: String? = null,
     )
 
@@ -60,9 +61,9 @@ class SearchViewModel(
         searchJob = viewModelScope.launch {
             val degrade = registry.enabled().filter { !it.capabilities.canSearch }
             // Write the trimmed query back so the field shows what was actually searched, without trailing spaces.
-            _state.update { it.copy(query = query, loading = true, searched = true, selectedGenre = null, results = emptyList(), degrade = degrade) }
+            _state.update { it.copy(query = query, loading = true, searched = true, selectedGenre = null, results = emptyList(), degrade = degrade, failed = emptyList()) }
             interactor.search(query).collect { update ->
-                _state.update { it.copy(loading = update.loading, results = update.results) }
+                _state.update { it.copy(loading = update.loading, results = update.results, failed = update.failed) }
             }
         }
     }
@@ -70,7 +71,7 @@ class SearchViewModel(
     /** Reset the search field and clear any results, returning the screen to its empty state. */
     fun clearQuery() {
         searchJob?.cancel()
-        _state.update { it.copy(query = "", loading = false, searched = false, selectedGenre = null, results = emptyList(), degrade = emptyList()) }
+        _state.update { it.copy(query = "", loading = false, searched = false, selectedGenre = null, results = emptyList(), degrade = emptyList(), failed = emptyList()) }
     }
 
     /** Browse a genre with no text query: stream merged results from every genre-capable provider. */
@@ -78,9 +79,9 @@ class SearchViewModel(
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
             val degrade = registry.enabled().filter { it.capabilities.canDeepLinkToGenre && genre in it.browsableGenres() }
-            _state.update { it.copy(loading = true, searched = true, selectedGenre = genre, results = emptyList(), degrade = degrade) }
+            _state.update { it.copy(loading = true, searched = true, selectedGenre = genre, results = emptyList(), degrade = degrade, failed = emptyList()) }
             interactor.browseByGenre(genre).collect { update ->
-                _state.update { it.copy(loading = update.loading, results = update.results) }
+                _state.update { it.copy(loading = update.loading, results = update.results, failed = update.failed) }
             }
         }
     }

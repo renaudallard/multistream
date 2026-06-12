@@ -56,7 +56,7 @@ class NetflixProvider(
             results
         } catch (e: NetflixApiException) {
             if (e.authError) api.invalidate()
-            emptyList()
+            throw e
         }
     }
 
@@ -123,7 +123,7 @@ class NetflixProvider(
             results
         } catch (e: NetflixApiException) {
             if (e.authError) api.invalidate()
-            emptyList()
+            throw e
         }
     }
 

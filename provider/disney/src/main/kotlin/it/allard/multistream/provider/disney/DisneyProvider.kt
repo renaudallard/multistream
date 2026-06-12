@@ -86,7 +86,8 @@ class DisneyProvider(
 
     /**
      * Run an authenticated API call, refreshing the session once if the access token has expired.
-     * Non-auth failures degrade to [fallback] so one bad call never breaks the app.
+     * [fallback] covers the not-logged-in cases; real API failures propagate so the caller can
+     * report the provider as unavailable instead of pretending it found nothing.
      */
     private suspend fun <T> authedCall(config: ProviderConfig, fallback: T, call: suspend (String) -> T): T {
         if (ensureSession(config) !is SessionState.Ready) return fallback
@@ -96,9 +97,9 @@ class DisneyProvider(
         val error = result.exceptionOrNull()
         if (error is DisneyApiException && error.authError) {
             val fresh = refreshSession(config, token) ?: return fallback
-            return runCatchingExceptCancellation { call(fresh) }.getOrDefault(fallback)
+            return call(fresh)
         }
-        return fallback
+        throw error ?: IllegalStateException("authedCall failed without an exception")
     }
 
     /** Refresh the session once, persisting the rotated token. Returns the new access token or null. */

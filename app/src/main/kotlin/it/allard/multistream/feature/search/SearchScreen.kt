@@ -157,6 +157,18 @@ fun SearchScreen(onOpenTitle: (TitleKey) -> Unit) {
                 if (state.searched && state.results.isEmpty() && !state.loading) {
                     item { Text(stringResource(R.string.search_no_matches), style = MaterialTheme.typography.bodyMedium) }
                 }
+                // Name the providers whose search failed (error or timeout): fewer results than
+                // expected should be visible, not mistaken for "not in their catalog".
+                if (state.searched && state.failed.isNotEmpty() && !state.loading) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.search_providers_failed, state.failed.joinToString(", ")),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
                 if (state.searched && state.degrade.isNotEmpty()) {
                     item {
                         Text(

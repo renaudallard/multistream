@@ -14,7 +14,6 @@ import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
 import it.allard.multistream.provider.api.WebLoginSpec
-import it.allard.multistream.provider.api.runCatchingExceptCancellation
 
 /**
  * Arte (free French/German public TV). Search is anonymous and works without login; the optional
@@ -47,7 +46,7 @@ class ArteProvider(
     // closest fit for KIDS (family viewing rather than a pure children's catalog).
     override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         val code = GENRE_CODES[genre] ?: return emptyList()
-        return runCatchingExceptCancellation { api.browseGenre(code, langFor(region), config.secrets.cookie) }.getOrDefault(emptyList())
+        return api.browseGenre(code, langFor(region), config.secrets.cookie)
     }
 
     override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
@@ -61,7 +60,7 @@ class ArteProvider(
         ProviderSecrets(cookie = cookies)
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
-        runCatchingExceptCancellation { api.search(query, langFor(region), config.secrets.cookie) }.getOrDefault(emptyList())
+        api.search(query, langFor(region), config.secrets.cookie)
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
         val url = ref.deepLinkHint

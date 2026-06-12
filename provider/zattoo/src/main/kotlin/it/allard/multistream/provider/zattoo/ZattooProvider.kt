@@ -65,7 +65,7 @@ class ZattooProvider(
         return try {
             api.search(query, region)
         } catch (e: ZattooApiException) {
-            if (e.authError) retryAfterAuth(query, region, config) else emptyList()
+            if (e.authError) retryAfterAuth(query, region, config) else throw e
         }
     }
 

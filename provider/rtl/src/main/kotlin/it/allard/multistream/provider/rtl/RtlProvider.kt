@@ -42,7 +42,7 @@ class RtlProvider(
     override fun supportedRegions(): Set<Region> = setOf(Region("BE"))
 
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
-        runCatchingExceptCancellation { api.search(query, region) }.getOrDefault(emptyList())
+        api.search(query, region)
 
     override fun browsableGenres(): Set<Genre> = GENRE_STOREFRONTS.keys
 
@@ -50,7 +50,7 @@ class RtlProvider(
     // rather than film genre; only documentaries correspond to a canonical genre.
     override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         val storefront = GENRE_STOREFRONTS[genre] ?: return emptyList()
-        return runCatchingExceptCancellation { api.browseStorefront(storefront, region) }.getOrDefault(emptyList())
+        return api.browseStorefront(storefront, region)
     }
 
     override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? =

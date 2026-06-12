@@ -109,7 +109,7 @@ class PlexProvider(
             }
         } catch (e: PlexApiException) {
             // A bad/unreachable server must never blank out search: fall back to Discover.
-            runCatchingExceptCancellation { api.search(query, discoverToken) }.getOrDefault(emptyList())
+            api.search(query, discoverToken)
         }
     }
 
@@ -121,7 +121,7 @@ class PlexProvider(
     override suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         ensureSession(config)
         val aliases = GENRE_ALIASES[genre] ?: return emptyList()
-        return runCatchingExceptCancellation { api.browseGenre(aliases, server, token) }.getOrDefault(emptyList())
+        return api.browseGenre(aliases, server, token)
     }
 
     override suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? {

@@ -16,6 +16,7 @@
     <!-- Search -->
     <string name="search_no_matches">Aucun résultat dans les catalogues.</string>
     <string name="search_direct_in">Rechercher directement dans :</string>
+    <string name="search_providers_failed">Sans réponse : %1$s</string>
     <string name="search_opens_in_app">Ouvre la recherche dans l\'appli</string>
     <string name="search_opens_app">Ouvre l\'appli</string>
 

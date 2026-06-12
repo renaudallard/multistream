@@ -78,7 +78,10 @@ class PrimeVideoProvider(
     override suspend fun fetchWatchedEpisodes(ref: ProviderRef, config: ProviderConfig): List<EpisodeCoord> =
         withSession(config) { cookie -> api.fetchWatchedEpisodes(ref.providerTitleId, cookie) }
 
-    /** Run [block] with the session cookie; empty without one, and drop the session on an auth error. */
+    /**
+     * Run [block] with the session cookie; empty without one. An auth error drops the session
+     * before rethrowing, so the caller sees the failure and the next call asks for a login.
+     */
     private suspend fun <T> withSession(config: ProviderConfig, block: suspend (String) -> List<T>): List<T> {
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
         val cookie = cookies ?: return emptyList()
@@ -86,7 +89,7 @@ class PrimeVideoProvider(
             block(cookie)
         } catch (e: PrimeApiException) {
             if (e.authError) dropSession(config)
-            emptyList()
+            throw e
         }
     }
 

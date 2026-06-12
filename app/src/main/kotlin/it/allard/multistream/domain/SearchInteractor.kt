@@ -34,8 +34,12 @@ import java.util.Collections
 import java.util.Locale
 import kotlin.coroutines.cancellation.CancellationException
 
-/** One emission of a streaming search: the titles merged so far, and whether more are pending. */
-data class SearchUpdate(val results: List<Title>, val loading: Boolean)
+/**
+ * One emission of a streaming search: the titles merged so far, whether more are pending, and the
+ * display names of providers whose search failed (error or timeout), so the UI can say a provider
+ * is unavailable instead of silently showing fewer results.
+ */
+data class SearchUpdate(val results: List<Title>, val loading: Boolean, val failed: List<String> = emptyList())
 
 /**
  * Federated search that streams results: each enabled+searchable provider runs in parallel (guarded
@@ -62,6 +66,7 @@ class SearchInteractor(
         val query = rawQuery.trim()
         val providers = registry.searchable()
         val accumulated = mutableListOf<UnifiedSearchResult>()
+        val failed = Collections.synchronizedList(mutableListOf<String>())
         synchronized(accumulated) { accumulated.addAll(SampleCatalog.search(query)) }
 
         emit(query, accumulated, loading = providers.isNotEmpty())
@@ -72,17 +77,18 @@ class SearchInteractor(
             for (provider in providers) {
                 launch {
                     val results = runProviderSearch(provider, query)
+                    if (results == null) failed.add(provider.displayName)
                     val snapshot = synchronized(accumulated) {
-                        accumulated.addAll(results)
+                        accumulated.addAll(results.orEmpty())
                         accumulated.toList()
                     }
-                    send(SearchUpdate(mergeAndIndex(query, snapshot), loading = true))
+                    send(SearchUpdate(mergeAndIndex(query, snapshot), loading = true, failed = failed.toList()))
                 }
             }
         }
         if (providers.isNotEmpty()) {
             val snapshot = synchronized(accumulated) { accumulated.toList() }
-            send(SearchUpdate(mergeAndIndex(query, snapshot), loading = false))
+            send(SearchUpdate(mergeAndIndex(query, snapshot), loading = false, failed = failed.toList()))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -94,22 +100,24 @@ class SearchInteractor(
     fun browseByGenre(genre: Genre): Flow<SearchUpdate> = channelFlow {
         val providers = registry.genreBrowsable().filter { genre in it.browsableGenres() }
         val accumulated = mutableListOf<UnifiedSearchResult>()
+        val failed = Collections.synchronizedList(mutableListOf<String>())
         send(SearchUpdate(emptyList(), loading = providers.isNotEmpty()))
         coroutineScope {
             for (provider in providers) {
                 launch {
                     val results = runProviderBrowse(provider, genre)
+                    if (results == null) failed.add(provider.displayName)
                     val snapshot = synchronized(accumulated) {
-                        accumulated.addAll(results)
+                        accumulated.addAll(results.orEmpty())
                         accumulated.toList()
                     }
-                    send(SearchUpdate(mergeAndIndexAlphabetical(snapshot), loading = true))
+                    send(SearchUpdate(mergeAndIndexAlphabetical(snapshot), loading = true, failed = failed.toList()))
                 }
             }
         }
         if (providers.isNotEmpty()) {
             val snapshot = synchronized(accumulated) { accumulated.toList() }
-            send(SearchUpdate(mergeAndIndexAlphabetical(snapshot), loading = false))
+            send(SearchUpdate(mergeAndIndexAlphabetical(snapshot), loading = false, failed = failed.toList()))
         }
     }.flowOn(Dispatchers.IO)
 
@@ -221,7 +229,8 @@ class SearchInteractor(
         )
     }
 
-    private suspend fun runProviderSearch(provider: StreamingProvider, query: String): List<UnifiedSearchResult> =
+    /** Null = the provider failed or timed out, as opposed to finding nothing. */
+    private suspend fun runProviderSearch(provider: StreamingProvider, query: String): List<UnifiedSearchResult>? =
         withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
             // runCatchingExceptCancellation lets a real cancellation (a superseded search) through
             // while still degrading a slow/failed provider to no results; the timeout cancellation is
@@ -230,15 +239,15 @@ class SearchInteractor(
                 val config = configFor(provider)
                 provider.search(query, config.region, config)
             }.getOrNull()
-        } ?: emptyList()
+        }
 
-    private suspend fun runProviderBrowse(provider: StreamingProvider, genre: Genre): List<UnifiedSearchResult> =
+    private suspend fun runProviderBrowse(provider: StreamingProvider, genre: Genre): List<UnifiedSearchResult>? =
         withTimeoutOrNull(PROVIDER_TIMEOUT_MS) {
             runCatchingExceptCancellation {
                 val config = configFor(provider)
                 provider.browseByGenre(genre, config.region, config)
             }.getOrNull()
-        } ?: emptyList()
+        }
 
     private companion object {
         const val PROVIDER_TIMEOUT_MS = 8_000L

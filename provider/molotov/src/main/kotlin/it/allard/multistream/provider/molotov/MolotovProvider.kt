@@ -48,7 +48,7 @@ class MolotovProvider(
         return try {
             api.browseByKind(kind, token, region)
         } catch (e: MolotovApiException) {
-            if (e.authError) retryBrowseAfterAuth(kind, region, config) else emptyList()
+            if (e.authError) retryBrowseAfterAuth(kind, region, config) else throw e
         }
     }
 
@@ -80,7 +80,7 @@ class MolotovProvider(
         return try {
             api.search(query, token, region)
         } catch (e: MolotovApiException) {
-            if (e.authError) retryAfterAuth(query, region, config) else emptyList()
+            if (e.authError) retryAfterAuth(query, region, config) else throw e
         }
     }
 
