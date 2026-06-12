@@ -79,7 +79,7 @@ shell for phone and Android TV.
 | **Plex** | ✅ | 10 † | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
 | **RTBF Auvio** | ✅ | 2 | title page | — | optional | free public API |
 | **RTL Play** | ✅ | 1 | title page | cast, summary | — | catalog search and details via DPG Media's lfvp API (anonymous, but Belgium-only); needs a Belgian connection |
-| **Play RTS** | ✅ | 4 | video page | — | optional | free SRG SSR Integration Layer; video results only |
+| **Play RTS** | ✅ | 4 | video page | — | — | free SRG SSR Integration Layer; video results only |
 | **ICI Tou.tv** | ✅ | 9 | title page | cast, summary | optional | Radio-Canada's public catalog API (anonymous, worldwide); lists episodes; only playback is Canada-locked |
 
 `✅ Search` = a real catalog query from this app. `Genre` = how many of the ten canonical genres
@@ -134,9 +134,8 @@ Login is per-provider and never required for search except where noted above.
   and passes it to the search best-effort.
 - **RTL Play** has no login: its lfvp catalog API is anonymous (geo-restricted to Belgium), and an
   RTL account session applies to a different host, so it would not affect catalog search anyway.
-- **Play RTS** searches without login (its SRG SSR Integration Layer catalog is public); an
-  **optional** WebView login captures your rts.ch account session and passes it to the search
-  best-effort.
+- **Play RTS** has no login: its SRG SSR Integration Layer catalog is public, and an rts.ch account
+  session applies to a different host, so it would not affect catalog search anyway.
 - **ICI Tou.tv** searches without login (the catalog and detail endpoints are anonymous and answer
   worldwide). The **optional** login is Radio-Canada's account sign-in (Azure AD B2C) in a WebView; it
   captures the access token and unlocks importing your watch progress. Only playback is geo-locked to

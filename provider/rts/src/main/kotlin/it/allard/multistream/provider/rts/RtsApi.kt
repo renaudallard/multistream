@@ -21,10 +21,10 @@ class RtsApi(
     private val baseUrl: String = "https://il.srgssr.ch/integrationlayer/2.0",
     private val businessUnit: String = "rts",
 ) {
-    suspend fun search(query: String, cookie: String? = null): List<UnifiedSearchResult> {
+    suspend fun search(query: String): List<UnifiedSearchResult> {
         val url = "$baseUrl/$businessUnit/searchResultMediaList" +
             "?q=${URLEncoder.encode(query, "UTF-8")}&pageSize=30&mediaType=VIDEO"
-        return get(url, cookie)
+        return get(url)
     }
 
     /**
@@ -37,13 +37,13 @@ class RtsApi(
         return get(url)
     }
 
-    private suspend fun get(url: String, cookie: String? = null): List<UnifiedSearchResult> {
-        val builder = Request.Builder()
+    private suspend fun get(url: String): List<UnifiedSearchResult> {
+        val request = Request.Builder()
             .url(url)
             .header("Accept", "application/json")
             .header("User-Agent", USER_AGENT)
-        if (!cookie.isNullOrBlank()) builder.header("Cookie", cookie)
-        val request = builder.get().build()
+            .get()
+            .build()
         client.await(request).use { response ->
             if (!response.isSuccessful) throw RtsApiException("HTTP ${response.code}")
             val root = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj()

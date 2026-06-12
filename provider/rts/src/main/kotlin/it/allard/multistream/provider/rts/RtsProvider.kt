@@ -6,19 +6,18 @@ import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
 import it.allard.multistream.core.model.ProviderRef
-import it.allard.multistream.core.model.ProviderSecrets
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.provider.api.Launcher
 import it.allard.multistream.provider.api.ProviderCapabilities
 import it.allard.multistream.provider.api.ProviderConfig
 import it.allard.multistream.provider.api.StreamingProvider
-import it.allard.multistream.provider.api.WebLoginSpec
 
 /**
- * Play RTS (Swiss French public TV, SRG SSR). Search is anonymous via the Integration Layer and works
- * without login; an optional WebView login passes your profil.rts.ch session to the search
- * (best-effort). Launch opens the Play RTS app at the video page. Local tracking is provider-independent.
+ * Play RTS (Swiss French public TV, SRG SSR). Search is anonymous via the Integration Layer, which
+ * is a public API on its own domain (il.srgssr.ch), so an rts.ch account session has nothing to
+ * authenticate against and no login is offered. Launch opens the Play RTS app at the video page.
+ * Local tracking is provider-independent.
  */
 class RtsProvider(
     private val api: RtsApi = RtsApi(),
@@ -31,7 +30,6 @@ class RtsProvider(
         canBrowseByGenre = true,
         canDeepLinkToTitle = true,
         requiresAuth = false,
-        optionalLogin = true,
     )
 
     override fun supportedRegions(): Set<Region> = setOf(Region("CH"))
@@ -46,18 +44,8 @@ class RtsProvider(
         return api.browseByTopic(topicUrn)
     }
 
-    override fun webLoginSpec(): WebLoginSpec = WebLoginSpec(
-        loginUrl = "https://www.rts.ch/profile/login",
-        cookieUrl = "https://www.rts.ch",
-        successCookie = "",
-        autoCapture = false,
-    )
-
-    override suspend fun loginWithCookies(cookies: String): ProviderSecrets =
-        ProviderSecrets(cookie = cookies)
-
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> =
-        api.search(query, config.secrets.cookie)
+        api.search(query)
 
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
         val url = ref.deepLinkHint ?: return Launcher.launchApp(context, packageName)
