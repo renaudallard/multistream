@@ -93,7 +93,8 @@ Live search is verified on a real device across all eleven services, and genre b
 that supports it. The search box carries a clear button that wipes the query in one tap, and leading or
 trailing spaces are stripped before the search runs. Leave the search box empty and the genre chips
 appear; tapping one fans out to the providers that carry that genre and merges the catalogs, exactly
-like a text search. A small built-in
+like a text search. Genre results come back sorted alphabetically with an A-Z letter strip down the
+right edge: tap or drag a letter to jump straight to those titles. A small built-in
 sample catalog also ships for an offline demo; live search itself runs only on a device with network.
 
 ## Episodes and watched state
