@@ -13,6 +13,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.net.URLDecoder
 
 class NetflixApiTest {
     private lateinit var server: MockWebServer
@@ -82,14 +83,14 @@ class NetflixApiTest {
         val post = server.takeRequest()
         assertTrue(post.path!!.contains("/pathEvaluator"))
         assertEquals("GUID42", post.getHeader("x-netflix.request.client.user.guid"))
-        val postBody = post.body.readUtf8()
+        val postBody = decodeForm(post.body.readUtf8())
         assertTrue(postBody.contains("authURL=AUTH123"))
         assertTrue(postBody.contains("\"|stranger\",\"titles\""))
         assertTrue(postBody.contains("\"reference\",[\"summary\",\"title\"]"))
         // boxart is fetched for the matched id in a second pathEvaluator call
         val boxPost = server.takeRequest()
         assertTrue(boxPost.path!!.contains("/pathEvaluator"))
-        val boxBody = boxPost.body.readUtf8()
+        val boxBody = decodeForm(boxPost.body.readUtf8())
         assertTrue(boxBody.contains("\"videos\",[80057281]"))
         assertTrue(boxBody.contains("\"boxarts\",[\"_342x684\",\"_665x375\"]"))
     }
@@ -134,7 +135,7 @@ class NetflixApiTest {
         assertTrue(server.takeRequest().path!!.contains("/browse")) // session
         val post = server.takeRequest()
         assertTrue(post.path!!.contains("/pathEvaluator"))
-        assertTrue(post.body.readUtf8().contains("\"genres\",6548,\"su\""))
+        assertTrue(decodeForm(post.body.readUtf8()).contains("\"genres\",6548,\"su\""))
     }
 
     @Test fun getSeasons_parsesMetadata() = runBlocking {
@@ -217,8 +218,15 @@ class NetflixApiTest {
         assertTrue(server.takeRequest().path!!.contains("/metadata?movieid=80117552"))
         val castPost = server.takeRequest()
         assertTrue(castPost.path!!.contains("/pathEvaluator"))
-        assertTrue(castPost.body.readUtf8().contains("\"cast\""))
+        assertTrue(decodeForm(castPost.body.readUtf8()).contains("\"cast\""))
     }
+
+    /** Decode each percent-encoded value of a form body for assertions on the raw Falcor paths. */
+    private fun decodeForm(body: String): String =
+        body.split("&").joinToString("&") { field ->
+            val (key, value) = field.split("=", limit = 2)
+            "$key=${URLDecoder.decode(value, "UTF-8")}"
+        }
 
     @Test fun notLoggedIn_throwsAuthError() {
         // The session refresh re-fetches /browse once on the auth error, so both attempts see login.

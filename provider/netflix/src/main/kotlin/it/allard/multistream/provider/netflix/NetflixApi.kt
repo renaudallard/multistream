@@ -18,6 +18,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.net.URLEncoder
 import kotlin.coroutines.cancellation.CancellationException
 
 class NetflixApiException(message: String, val authError: Boolean = false) : Exception(message)
@@ -119,7 +120,7 @@ class NetflixApi(
         val base = "[\"search\",\"byTerm\",\"|$term\",\"titles\",$PAGE_SIZE"
         val idPath = "$base,[\"id\",\"name\",\"requestId\",\"trackIds\"]]"
         val refPath = "$base,{\"from\":0,\"to\":24},\"reference\",[\"summary\",\"title\"]]"
-        val body = "path=$refPath&path=$idPath&authURL=${current.authUrl}"
+        val body = falcorBody(current, refPath, idPath)
         val jsonGraph = exec(pathEvaluatorRequest(current, body))["jsonGraph"].obj() ?: return emptyList()
         // Netflix's byTerm search pads the real match with themed suggestions; keep only titles that
         // actually contain the query so the unified results aren't polluted.
@@ -138,7 +139,7 @@ class NetflixApi(
         val base = "[\"genres\",$genreId,\"su\""
         val refPath = "$base,{\"from\":0,\"to\":47},\"reference\",[\"summary\",\"title\"]]"
         val idPath = "$base,{\"from\":0,\"to\":47},\"reference\",[\"id\",\"name\",\"requestId\"]]"
-        val body = "path=$refPath&path=$idPath&authURL=${current.authUrl}"
+        val body = falcorBody(current, refPath, idPath)
         val jsonGraph = exec(pathEvaluatorRequest(current, body))["jsonGraph"].obj() ?: return emptyList()
         val matched = NetflixParser.parseGenre(jsonGraph, genreId, region)
         // Boxart isn't materialized through the reference path, so fetch it for the matched ids.
@@ -173,7 +174,7 @@ class NetflixApi(
         val idList = ids.mapNotNull { it.toLongOrNull() }.joinToString(",")
         if (idList.isEmpty()) return emptyMap()
         val sizes = "[\"${NetflixParser.ART_POSTER}\",\"${NetflixParser.ART_LANDSCAPE}\"]"
-        val body = "path=[\"videos\",[$idList],\"boxarts\",$sizes,\"jpg\",\"value\"]&authURL=${current.authUrl}"
+        val body = falcorBody(current, "[\"videos\",[$idList],\"boxarts\",$sizes,\"jpg\",\"value\"]")
         val jsonGraph = exec(pathEvaluatorRequest(current, body))["jsonGraph"].obj() ?: return emptyMap()
         return NetflixParser.parseBoxarts(jsonGraph, ids)
     }
@@ -182,13 +183,20 @@ class NetflixApi(
     private suspend fun fetchCast(current: Session, videoId: String): List<String> {
         val id = videoId.toLongOrNull() ?: return emptyList()
         val path = "[\"videos\",$id,\"cast\",{\"from\":0,\"to\":14},[\"id\",\"name\"]]"
-        val body = "path=$path&authURL=${current.authUrl}"
+        val body = falcorBody(current, path)
         val jsonGraph = exec(pathEvaluatorRequest(current, body))["jsonGraph"].obj() ?: return emptyList()
         return NetflixParser.parseCast(jsonGraph, videoId)
     }
 
+    /** Form-urlencoded body of Falcor paths plus the authURL, with every value percent-encoded. */
+    private fun falcorBody(current: Session, vararg paths: String): String =
+        (paths.map { "path=${formEncode(it)}" } + "authURL=${formEncode(current.authUrl)}").joinToString("&")
+
+    /** Percent-encode a form/query value; the decoded authURL can contain '+', '=' and '&'. */
+    private fun formEncode(value: String): String = URLEncoder.encode(value, "UTF-8")
+
     private fun metadataRequest(current: Session, videoId: String): Request = Request.Builder()
-        .url("${current.memberApi}/metadata?movieid=$videoId&authURL=${current.authUrl}")
+        .url("${current.memberApi}/metadata?movieid=$videoId&authURL=${formEncode(current.authUrl)}")
         .header("Accept", "application/json")
         .header("User-Agent", USER_AGENT)
         .get()
