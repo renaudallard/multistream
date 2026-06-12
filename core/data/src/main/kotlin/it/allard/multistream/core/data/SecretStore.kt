@@ -38,9 +38,16 @@ class SecretStore(context: Context) {
             memory[provider.name] = secrets
             return
         }
-        runCatching { store.edit().putString(provider.name, json.encodeToString(secrets)).apply() }
-            .onSuccess { memory.remove(provider.name) } // store is now authoritative; drop any stale fallback
-            .onFailure { memory[provider.name] = secrets }
+        // commit() (not apply()) so a failed disk write is actually observable here: apply() commits
+        // in the background and never reports, which made the in-memory fallback unreachable and
+        // dropped the safety copy before the write was durable. Callers run on Dispatchers.IO.
+        val written = runCatching { store.edit().putString(provider.name, json.encodeToString(secrets)).commit() }
+            .getOrDefault(false)
+        if (written) {
+            memory.remove(provider.name) // store is now authoritative; drop any stale fallback
+        } else {
+            memory[provider.name] = secrets
+        }
     }
 
     fun clear(provider: ProviderId) {
