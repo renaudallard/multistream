@@ -56,9 +56,11 @@ from: ..."), so missing rows are visible instead of looking like catalog misses.
 Opening a series lists its episodes by asking every provider that can enumerate them and unioning the
 results, so a service carrying the full run completes one that holds only part of it.
 
-On each launch the app asks GitHub for the latest release and, if it is newer than the running build,
-shows a dismissible banner linking straight to the new APK. The check is best-effort: offline, a
-rate-limited API, or any error just leaves the banner hidden.
+On each launch, on each return to the app and on each search the app asks GitHub for the latest
+release (a conditional ETag request, throttled to once a minute) and, if it is newer than the
+running build, shows a dismissible banner linking straight to the new APK. The check is
+best-effort: offline, a rate-limited API, or any error just leaves the banner hidden until a later
+check succeeds.
 
 ## Services and capabilities
 
