@@ -87,8 +87,10 @@ class NetflixProvider(
             persistRotated(cookie, config)
             watched
         } catch (e: NetflixApiException) {
+            // Rethrow like search does: a dead session must surface as a failed import, not as
+            // "nothing watched".
             if (e.authError) api.invalidate()
-            emptyList()
+            throw e
         }
     }
 
