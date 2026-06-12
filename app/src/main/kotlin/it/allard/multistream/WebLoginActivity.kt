@@ -83,9 +83,13 @@ class WebLoginActivity : ComponentActivity() {
 
         // Manual fallback: auto-detection keys off one cookie name, but Amazon's flow varies by
         // region and 2FA. The button hands over whatever cookies exist once the user is signed in.
+        // Ignored during the logout phase: the cookies present then belong to the old session being
+        // invalidated server-side and must not be captured as a login.
         val doneButton = Button(this).apply {
             text = getString(R.string.weblogin_finish)
-            setOnClickListener { succeed(cookieManager, cookieManager.getCookie(cookieUrl)) }
+            setOnClickListener {
+                if (loginPhase) succeed(cookieManager, cookieManager.getCookie(cookieUrl))
+            }
         }
         val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         layout.addView(doneButton, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
