@@ -78,9 +78,17 @@ object MolotovParser {
         // Episode listing needs the channel-scoped program view endpoint, so both ids ride in the
         // title id when known; older slug-only refs simply cannot list episodes.
         val titleId = if (channelId != null && programId != null) "$channelId:$programId" else id
-        // The app verifies every molotov.tv link but only routes its real paths; the canonical
-        // program page (per the site's sitemap) is /fr_fr/p/<program_id>/<slug>.
-        val deepLink = if (programId != null && slug != null) "https://www.molotov.tv/fr_fr/p/$programId/$slug" else null
+        // Deep link onto the program page. The Fubo-based Molotov app routes only three URL shapes
+        // (manifest intent filters): www.molotov.tv/deeplink*, the molotov:// scheme, and
+        // app.molotov.tv with any path AS LONG AS an `al` query param is present (the app checks only
+        // that it is non-null). A www.molotov.tv/fr_fr/p/... link matches none of these, so it fell
+        // through to a bare app launch onto the home screen. app.molotov.tv carries the same
+        // /fr_fr/p/<program_id>/<slug> path the website resolves, so it lands on the show.
+        val deepLink = if (programId != null && slug != null) {
+            "https://app.molotov.tv/fr_fr/p/$programId/$slug?al=1"
+        } else {
+            null
+        }
         return UnifiedSearchResult(
             provider = ProviderId.MOLOTOV,
             ref = ProviderRef(ProviderId.MOLOTOV, titleId, deepLink, region),
