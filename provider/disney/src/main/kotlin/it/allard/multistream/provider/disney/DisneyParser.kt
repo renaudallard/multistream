@@ -134,7 +134,12 @@ object DisneyParser {
         return seasons.mapIndexedNotNull { index, season ->
             val obj = season.obj() ?: return@mapIndexedNotNull null
             val id = obj["id"].string() ?: return@mapIndexedNotNull null
-            SeasonRef(id, index + 1, obj["visuals"].obj()?.get("name").string())
+            val visuals = obj["visuals"].obj()
+            // Use the season's real number when present: the list can be non-contiguous or not
+            // 1-based, and the watch-state import keys episodes on the real seasonNumber, so an
+            // invented index would mismatch it. The list position is only a last resort.
+            val number = visuals?.get("seasonNumber").string()?.toIntOrNull() ?: (index + 1)
+            SeasonRef(id, number, visuals?.get("name").string())
         }
     }
 
