@@ -101,16 +101,12 @@ class PlexProvider(
         val serverUrl = server
         val serverToken = token
         val discoverToken = accountToken ?: token
-        return try {
-            if (serverUrl != null && serverToken != null) {
-                api.searchServer(serverUrl, serverToken, query)
-            } else {
-                api.search(query, discoverToken)
-            }
-        } catch (e: PlexApiException) {
-            // A bad/unreachable server must never blank out search: fall back to Discover.
-            api.search(query, discoverToken)
-        }
+        if (serverUrl == null || serverToken == null) return api.search(query, discoverToken)
+        // A bad or unreachable server must never blank out search: an offline server fails with an
+        // IOException (timeout, connect failure), a misbehaving one with PlexApiException, so catch
+        // both and fall back to Discover.
+        return runCatchingExceptCancellation { api.searchServer(serverUrl, serverToken, query) }
+            .getOrElse { api.search(query, discoverToken) }
     }
 
     // Genre browse runs against the member's own server library (Discover has no genre route). The genre
