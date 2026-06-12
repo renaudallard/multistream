@@ -29,6 +29,10 @@ import androidx.core.view.WindowInsetsCompat
 class WebLoginActivity : ComponentActivity() {
     private var webView: WebView? = null
 
+    // True once all prior session state has been wiped and the real login page is loading; cookies
+    // seen before that are the old (possibly just-invalidated) session and must not be captured.
+    private var captureArmed = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         // The user types provider credentials here, so keep the screen out of screenshots, the
@@ -53,13 +57,16 @@ class WebLoginActivity : ComponentActivity() {
         webView.settings.javaScriptEnabled = true
         webView.settings.domStorageEnabled = true
         // When a logout URL is set, first load it (with the existing session so the server signs
-        // out), then wipe local state and load the real login. Success is captured only after that.
-        var loginPhase = logoutUrl.isBlank()
+        // out), then wipe local state and load the real login. Capture stays disarmed until the
+        // async cookie wipe has actually completed: a logout page can client-side redirect and fire
+        // more onPageFinished callbacks while the old session cookies are still pending deletion,
+        // and those must never be captured as a login.
+        var logoutPhase = logoutUrl.isNotBlank()
         webView.webViewClient = object : WebViewClient() {
             override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
                 // OAuth implicit flow: the access token is in the redirect URL fragment, so capture it
                 // as soon as the WebView navigates to the redirect target, before its page runs.
-                if (loginPhase && tokenRedirectPrefix != null && tokenFragmentKey != null &&
+                if (captureArmed && tokenRedirectPrefix != null && tokenFragmentKey != null &&
                     url != null && url.startsWith(tokenRedirectPrefix)
                 ) {
                     tokenFromFragment(url, tokenFragmentKey)?.let {
@@ -70,12 +77,12 @@ class WebLoginActivity : ComponentActivity() {
             }
 
             override fun onPageFinished(view: WebView?, url: String?) {
-                if (!loginPhase) {
-                    loginPhase = true
+                if (logoutPhase) {
+                    logoutPhase = false
                     wipeAndLoad(cookieManager, webView, loginUrl)
                     return
                 }
-                if (!autoCapture) return
+                if (!captureArmed || !autoCapture) return
                 val cookies = cookieManager.getCookie(cookieUrl)
                 if (hasCookie(cookies, successCookie)) succeed(cookieManager, cookies)
             }
@@ -83,12 +90,12 @@ class WebLoginActivity : ComponentActivity() {
 
         // Manual fallback: auto-detection keys off one cookie name, but Amazon's flow varies by
         // region and 2FA. The button hands over whatever cookies exist once the user is signed in.
-        // Ignored during the logout phase: the cookies present then belong to the old session being
-        // invalidated server-side and must not be captured as a login.
+        // Ignored until capture is armed: the cookies present before the wipe completes belong to
+        // the old session being invalidated server-side and must not be captured as a login.
         val doneButton = Button(this).apply {
             text = getString(R.string.weblogin_finish)
             setOnClickListener {
-                if (loginPhase) succeed(cookieManager, cookieManager.getCookie(cookieUrl))
+                if (captureArmed) succeed(cookieManager, cookieManager.getCookie(cookieUrl))
             }
         }
         val layout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -134,6 +141,7 @@ class WebLoginActivity : ComponentActivity() {
             // The clear is async; the user may have backed out before it finished, and the WebView
             // must not be touched after onDestroy has destroyed it.
             if (isDestroyed || isFinishing) return@removeAllCookies
+            captureArmed = true
             cookieManager.setAcceptCookie(true)
             webView.loadUrl(url)
         }
