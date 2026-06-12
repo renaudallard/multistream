@@ -11,8 +11,8 @@ class UpdateParseTest {
           "tag_name": "v0.3.0",
           "html_url": "https://github.com/x/releases/v0.3.0",
           "assets": [
-            {"name": "notes.txt", "browser_download_url": "https://x/notes.txt"},
-            {"name": "multistream.apk", "browser_download_url": "https://x/multistream.apk", "id": 9}
+            {"name": "notes.txt", "browser_download_url": "https://github.com/x/notes.txt"},
+            {"name": "multistream.apk", "browser_download_url": "https://github.com/x/multistream.apk", "id": 9}
           ]
         }
     """.trimIndent()
@@ -20,7 +20,14 @@ class UpdateParseTest {
     @Test fun returnsApkAssetWhenNewer() {
         val info = parseUpdate(payload, "0.2.9")
         assertEquals("0.3.0", info?.version)
-        assertEquals("https://x/multistream.apk", info?.apkUrl)
+        assertEquals("https://github.com/x/multistream.apk", info?.apkUrl)
+    }
+
+    @Test fun nullWhenApkAssetIsNotOnGithub() {
+        val offsite = """{"tag_name":"v9.9.9","assets":[
+            {"name":"a.apk","browser_download_url":"https://evil.example/a.apk"},
+            {"name":"b.apk","browser_download_url":"http://github.com/x/b.apk"}]}"""
+        assertNull(parseUpdate(offsite, "0.2.0"))
     }
 
     @Test fun nullWhenNotNewer() = assertNull(parseUpdate(payload, "0.3.0"))

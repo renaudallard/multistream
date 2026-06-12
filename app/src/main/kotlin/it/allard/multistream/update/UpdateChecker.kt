@@ -11,6 +11,7 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.Request
 
 /** A newer release found on GitHub, with the direct link to its APK asset. */
@@ -80,7 +81,9 @@ internal fun parseUpdate(body: String, currentVersion: String): UpdateInfo? {
         .mapNotNull { it as? JsonObject }
         .firstOrNull { it["name"]?.jsonPrimitive?.contentOrNull?.endsWith(".apk", ignoreCase = true) == true }
         ?.get("browser_download_url")?.jsonPrimitive?.contentOrNull
-        ?.takeIf { it.isNotEmpty() }
+        // Release assets are always served from https://github.com; anything else in the payload
+        // (a tampered or proxied response) must not be handed to the browser as the update link.
+        ?.takeIf { url -> url.toHttpUrlOrNull()?.let { it.isHttps && it.host == "github.com" } == true }
         ?: return null
     return UpdateInfo(tag.removePrefix("v").removePrefix("V"), apkUrl)
 }
