@@ -52,15 +52,25 @@ class UpdateChecker(
         }
     }
 
+    // ETag of the last release payload seen. A conditional request answered with 304 does not
+    // count against GitHub's unauthenticated rate limit, so repeated checks stay free.
+    @Volatile
+    private var etag: String? = null
+
     private suspend fun fetchLatest(): UpdateInfo? = runCatching {
         val request = Request.Builder()
             .url(latestReleaseUrl)
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", USER_AGENT)
+            .apply { etag?.let { header("If-None-Match", it) } }
             .build()
         client.await(request).use { response ->
+            // 304: the payload is unchanged since the check that stored the ETag, which found no
+            // update (a found update stops the checks), so there is still none.
+            if (response.code == 304) return@use null
             if (!response.isSuccessful) return@use null
             val body = response.body?.string() ?: return@use null
+            response.header("ETag")?.let { etag = it }
             parseUpdate(body, currentVersion)
         }
     }.getOrNull()

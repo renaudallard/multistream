@@ -27,6 +27,20 @@ class UpdateCheckerTest {
         }
     }
 
+    @Test fun sendsEtagAndAcceptsNotModified() = runBlocking {
+        MockWebServer().use { server ->
+            // First check: current release, no update; second check: 304 against the stored ETag.
+            server.enqueue(MockResponse().setBody("""{"tag_name":"v0.2.6","assets":[]}""").setHeader("ETag", "\"abc\""))
+            server.enqueue(MockResponse().setResponseCode(304))
+            val checker = UpdateChecker("0.2.6", server.url("/latest").toString())
+            checker.refresh()
+            checker.refresh()
+            assertNull(checker.update.value)
+            assertNull(server.takeRequest().getHeader("If-None-Match"))
+            assertEquals("\"abc\"", server.takeRequest().getHeader("If-None-Match"))
+        }
+    }
+
     @Test fun foundUpdateStopsFurtherChecks() = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setBody(release))
