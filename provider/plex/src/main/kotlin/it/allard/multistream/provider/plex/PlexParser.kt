@@ -117,19 +117,6 @@ object PlexParser {
                 )
             }
 
-    /**
-     * Compact per-episode summary (`S<parentIndex>E<index>:viewCount`, with the resume offset appended
-     * when present) for on-device diagnosis, so the watched field can be confirmed from a real server.
-     */
-    fun watchDebug(root: JsonObject): String =
-        episodes(root).joinToString(" ") { episode ->
-            val season = episode["parentIndex"].int()
-            val number = episode["index"].int()
-            val views = episode["viewCount"].int() ?: 0
-            val offset = episode["viewOffset"].int()
-            "S${season ?: "-"}E${number ?: "-"}:$views" + if (offset != null) "@$offset" else ""
-        }
-
     private fun episodes(root: JsonObject): List<JsonObject> =
         root["MediaContainer"].obj()?.get("Metadata").array()?.mapNotNull { it.obj() }.orEmpty()
 }

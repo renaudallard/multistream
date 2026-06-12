@@ -2,7 +2,6 @@ package it.allard.multistream.provider.toutv
 
 import android.content.Context
 import android.content.Intent
-import android.util.Log
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.Genre
 import it.allard.multistream.core.model.ProviderId
@@ -80,7 +79,6 @@ class ToutvProvider(
 
     override suspend fun loginWithCookies(cookies: String): ProviderSecrets {
         // The captured value is the B2C access token (a JWT), not a cookie header.
-        Log.i("ToutvLogin", "captured token len=${cookies.length} jwt=${cookies.startsWith("ey")}")
         return ProviderSecrets(token = cookies)
     }
 

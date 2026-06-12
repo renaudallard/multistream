@@ -1,6 +1,5 @@
 package it.allard.multistream.provider.plex
 
-import android.util.Log
 import it.allard.multistream.core.model.EpisodeCoord
 import it.allard.multistream.core.model.MediaType
 import it.allard.multistream.core.model.ProviderRef
@@ -187,17 +186,8 @@ class PlexApi(
         client.await(Request.Builder().url(url).headers(headers(token)).get().build()).use { response ->
             if (response.code == 401) throw PlexApiException("Unauthorized", authError = true)
             if (!response.isSuccessful) throw PlexApiException("HTTP ${response.code}")
-            val body = response.body?.string().orEmpty()
-            val root = NetJson.parseToJsonElement(body).obj() ?: return emptyList()
-            val watched = PlexParser.parseWatchedEpisodes(root)
-            // Log the parsed coords plus a compact per-episode (S<parentIndex>E<index>:viewCount) view of
-            // the raw response so an on-device run confirms the exact watched field; truncate the blob.
-            Log.i(
-                WATCH_TAG,
-                "show $ratingKey watched=${watched.size}: $watched | ${PlexParser.watchDebug(root)} " +
-                    "| raw=${body.take(MAX_RAW_LOG)}",
-            )
-            return watched
+            val root = NetJson.parseToJsonElement(response.body?.string().orEmpty()).obj() ?: return emptyList()
+            return PlexParser.parseWatchedEpisodes(root)
         }
     }
 
@@ -281,7 +271,5 @@ class PlexApi(
         const val CLIENT_ID = "it.allard.multistream"
         const val MAX_POLLS = 360
         const val POLL_INTERVAL_MS = 2_000L
-        const val WATCH_TAG = "PlexWatch"
-        const val MAX_RAW_LOG = 4_000
     }
 }
