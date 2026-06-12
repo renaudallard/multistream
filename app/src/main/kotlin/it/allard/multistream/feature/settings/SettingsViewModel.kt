@@ -57,12 +57,15 @@ class SettingsViewModel(
     /**
      * Re-read which providers still have a stored session. A provider can clear its own session
      * during a search (a dead refresh token), so the screen re-reads on resume to reflect that
-     * instead of showing a stale "logged in". Called when no login is in flight, so a plain replace
-     * is safe.
+     * instead of showing a stale "logged in". A WebView login result can land while we read (its
+     * callback fires alongside ON_RESUME), so keep any state that changed during the read instead
+     * of reverting a just-completed login with the stale snapshot.
      */
     fun refreshLoginState() {
         viewModelScope.launch(Dispatchers.IO) {
-            _loggedIn.value = registry.providers.associate { it.id to !secrets().read(it.id).isEmpty }
+            val before = _loggedIn.value
+            val fresh = registry.providers.associate { it.id to !secrets().read(it.id).isEmpty }
+            _loggedIn.update { current -> fresh + current.filter { (id, state) -> before[id] != state } }
         }
     }
 
