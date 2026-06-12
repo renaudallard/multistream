@@ -166,7 +166,8 @@ private fun LoginSection(
         if (linkPrompt != null) {
             Text(stringResource(R.string.settings_link_approve), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(4.dp))
-            Button(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(linkPrompt.url))) }) {
+            // A device without a browser (Android TV) has no handler for the URL; no crash on tap.
+            Button(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(linkPrompt.url))) } }) {
                 Text(stringResource(R.string.settings_link_open_signin))
             }
             Spacer(Modifier.height(4.dp))
