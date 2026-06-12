@@ -72,6 +72,19 @@ class SettingsViewModel(
     private val _message = MutableStateFlow<String?>(null)
     val message: StateFlow<String?> = _message.asStateFlow()
 
+    /** In-progress login form input for one provider's card. */
+    data class CredentialDraft(val user: String = "", val pass: String = "")
+
+    // Held in the ViewModel so typed credentials survive the card scrolling out of the LazyColumn
+    // (disposed items lose plain remember state) and rotation, without ever being written to saved
+    // instance state, which can persist to disk.
+    private val _drafts = MutableStateFlow<Map<ProviderId, CredentialDraft>>(emptyMap())
+    val drafts: StateFlow<Map<ProviderId, CredentialDraft>> = _drafts.asStateFlow()
+
+    fun updateDraft(provider: ProviderId, user: String, pass: String) {
+        _drafts.update { it + (provider to CredentialDraft(user, pass)) }
+    }
+
     /** A device-link login in progress: the code to show and the page to enter it on. */
     data class LinkPrompt(val providerId: ProviderId, val code: String, val url: String)
 
@@ -103,6 +116,7 @@ class SettingsViewModel(
             }
             if (result.isSuccess) {
                 _loggedIn.update { it + (provider.id to true) }
+                _drafts.update { it - provider.id } // credentials are stored; drop the typed copy
                 _message.value = appContext.getString(R.string.msg_logged_in, provider.displayName)
             } else {
                 _message.value = appContext.getString(

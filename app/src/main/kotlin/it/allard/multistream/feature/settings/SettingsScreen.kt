@@ -63,6 +63,7 @@ fun SettingsScreen() {
     val rows by viewModel.rows.collectAsState()
     val loggedIn by viewModel.loggedIn.collectAsState()
     val linkPrompt by viewModel.linkPrompt.collectAsState()
+    val drafts by viewModel.drafts.collectAsState()
     val message by viewModel.message.collectAsState()
     val context = LocalContext.current
 
@@ -122,6 +123,8 @@ fun SettingsScreen() {
                             optional = row.provider.capabilities.optionalLogin && !row.provider.capabilities.requiresAuth,
                             linkLogin = row.provider.capabilities.linkLogin,
                             linkPrompt = linkPrompt?.takeIf { it.providerId == row.provider.id },
+                            draft = drafts[row.provider.id] ?: SettingsViewModel.CredentialDraft(),
+                            onDraftChange = { user, pass -> viewModel.updateDraft(row.provider.id, user, pass) },
                             onStartLink = { viewModel.startLink(row.provider) },
                             onCancelLink = { viewModel.cancelLink() },
                             onLogin = { email, password -> viewModel.login(row.provider, email, password) },
@@ -144,6 +147,8 @@ private fun LoginSection(
     optional: Boolean = false,
     linkLogin: Boolean = false,
     linkPrompt: SettingsViewModel.LinkPrompt? = null,
+    draft: SettingsViewModel.CredentialDraft = SettingsViewModel.CredentialDraft(),
+    onDraftChange: (String, String) -> Unit = { _, _ -> },
     onStartLink: () -> Unit = {},
     onCancelLink: () -> Unit = {},
     onLogin: (String, String) -> Unit,
@@ -208,11 +213,11 @@ private fun LoginSection(
         }
         return
     }
-    var email by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    // The field state lives in the ViewModel (the draft): a LazyColumn disposes off-screen items
+    // and plain remember state with them, so typed credentials would vanish on scroll.
     OutlinedTextField(
-        value = email,
-        onValueChange = { email = it },
+        value = draft.user,
+        onValueChange = { onDraftChange(it, draft.pass) },
         label = { Text(userLabel) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
@@ -220,8 +225,8 @@ private fun LoginSection(
     )
     Spacer(Modifier.height(4.dp))
     OutlinedTextField(
-        value = password,
-        onValueChange = { password = it },
+        value = draft.pass,
+        onValueChange = { onDraftChange(draft.user, it) },
         label = { Text(passLabel) },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
@@ -229,7 +234,7 @@ private fun LoginSection(
         modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(4.dp))
-    Button(onClick = { onLogin(email, password) }) { Text(stringResource(R.string.settings_log_in)) }
+    Button(onClick = { onLogin(draft.user, draft.pass) }) { Text(stringResource(R.string.settings_log_in)) }
 }
 
 @Composable
