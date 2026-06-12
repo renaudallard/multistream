@@ -66,12 +66,6 @@ interface StreamingProvider {
      */
     suspend fun browseByGenre(genre: Genre, region: Region, config: ProviderConfig): List<UnifiedSearchResult> = emptyList()
 
-    /**
-     * Open a genre page in the provider's app when it cannot return a genre title list (a degrade for
-     * genre browse). Only used when [ProviderCapabilities.canDeepLinkToGenre].
-     */
-    fun genreLaunchIntent(context: Context, genre: Genre, region: Region): Intent? = null
-
     /** Detail for one of this provider's refs. Only called when [ProviderCapabilities.canGetDetails]. */
     suspend fun getDetails(ref: ProviderRef, config: ProviderConfig): ProviderTitleDetails? = null
 

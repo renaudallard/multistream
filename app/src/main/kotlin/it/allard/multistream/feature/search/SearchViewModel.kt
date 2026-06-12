@@ -41,10 +41,10 @@ class SearchViewModel(
     private var searchJob: Job? = null
 
     init {
-        // The genre chips offer only genres some enabled provider can actually browse or open.
+        // The genre chips offer only genres some enabled provider can actually browse.
         viewModelScope.launch {
             val available = registry.enabled().flatMap { p ->
-                if (p.capabilities.canBrowseByGenre || p.capabilities.canDeepLinkToGenre) p.browsableGenres() else emptySet()
+                if (p.capabilities.canBrowseByGenre) p.browsableGenres() else emptySet()
             }.toSet()
             _state.update { s -> s.copy(genres = Genre.entries.filter { it in available }) }
         }
@@ -78,8 +78,7 @@ class SearchViewModel(
     fun browse(genre: Genre) {
         searchJob?.cancel()
         searchJob = viewModelScope.launch {
-            val degrade = registry.enabled().filter { it.capabilities.canDeepLinkToGenre && genre in it.browsableGenres() }
-            _state.update { it.copy(loading = true, searched = true, selectedGenre = genre, results = emptyList(), degrade = degrade, failed = emptyList()) }
+            _state.update { it.copy(loading = true, searched = true, selectedGenre = genre, results = emptyList(), degrade = emptyList(), failed = emptyList()) }
             interactor.browseByGenre(genre).collect { update ->
                 _state.update { it.copy(loading = update.loading, results = update.results, failed = update.failed) }
             }

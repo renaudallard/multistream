@@ -18,9 +18,6 @@ data class ProviderCapabilities(
     // importing into local tracking (Netflix, via the member /metadata bookmarks).
     val canFetchWatchState: Boolean = false,
     val canDeepLinkToTitle: Boolean = false,
-    // The provider can open a genre page in its app even though it cannot return a genre title list
-    // (a last-resort degrade for genre browse).
-    val canDeepLinkToGenre: Boolean = false,
     val canDeepLinkToEpisode: Boolean = false,
     val canDeepLinkToPlay: Boolean = false,
     val canInAppSearchDeepLink: Boolean = false,
