@@ -181,10 +181,12 @@ object PrimeParser {
     /** Decide whether an episode node is watched from whichever watch field happens to be present. */
     private fun isWatched(obj: JsonObject): Boolean {
         if (WATCHED_FLAG_KEYS.any { obj[it].bool() == true }) return true
-        // Percentage-style progress (0..100 or 0..1): watched once it crosses the threshold.
+        // The percent-named fields are 0..100; compare against the threshold scaled to a percentage.
         obj["progressPercentage"].int()?.let { if (it >= WATCHED_FRACTION * 100) return true }
         obj["percentWatched"].int()?.let { if (it >= WATCHED_FRACTION * 100) return true }
-        obj["progress"].int()?.let { if (it >= WATCHED_FRACTION * 100) return true }
+        // `progress` is a 0..1 fraction here, same as the hydration path; read it as a double so a
+        // fractional value (e.g. 0.95, or 1.0) is not lost by an integer parse.
+        (obj["progress"] as? JsonPrimitive)?.doubleOrNull?.let { if (it >= WATCHED_FRACTION) return true }
         return false
     }
 
