@@ -15,6 +15,9 @@ import it.allard.multistream.core.net.bool
 import it.allard.multistream.core.net.buildClient
 import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonObject
@@ -70,14 +73,19 @@ class DisneyApi(
     /** Entity page -> season list, then one call per season for its episodes. */
     suspend fun getSeasons(entityId: String, accessToken: String): List<Season> {
         val page = execContentGet("$apiBase/explore/v1.9/page/entity-$entityId", accessToken)
-        return DisneyParser.parseSeasonRefs(page).map { season ->
-            val episodes = runCatchingExceptCancellation {
-                DisneyParser.parseEpisodes(
-                    execContentGet("$apiBase/explore/v1.7/season/${season.id}", accessToken),
-                    season.number,
-                )
-            }.getOrDefault(emptyList())
-            Season(season.number, season.name, episodes)
+        // Fetch every season's page concurrently; awaitAll keeps them in season order.
+        return coroutineScope {
+            DisneyParser.parseSeasonRefs(page).map { season ->
+                async {
+                    val episodes = runCatchingExceptCancellation {
+                        DisneyParser.parseEpisodes(
+                            execContentGet("$apiBase/explore/v1.7/season/${season.id}", accessToken),
+                            season.number,
+                        )
+                    }.getOrDefault(emptyList())
+                    Season(season.number, season.name, episodes)
+                }
+            }.awaitAll()
         }
     }
 
@@ -98,12 +106,19 @@ class DisneyApi(
         val page = execContentGet("$apiBase/explore/v1.9/page/entity-$entityId", accessToken)
         val refs = LinkedHashMap<String, DisneyEpisodeRef>()
         DisneyParser.parseEpisodeRefs(page).forEach { refs.putIfAbsent(it.pid, it) }
-        for (season in DisneyParser.parseSeasonRefs(page)) {
-            runCatchingExceptCancellation {
-                execContentGet("$apiBase/explore/v1.7/season/${season.id}", accessToken)
-            }.getOrNull()?.let { seasonPage ->
-                DisneyParser.parseEpisodeRefs(seasonPage).forEach { refs.putIfAbsent(it.pid, it) }
-            }
+        // Fetch the season pages concurrently, then merge in season order so the pid-dedup
+        // (first occurrence wins) stays deterministic.
+        val seasonPages = coroutineScope {
+            DisneyParser.parseSeasonRefs(page).map { season ->
+                async {
+                    runCatchingExceptCancellation {
+                        execContentGet("$apiBase/explore/v1.7/season/${season.id}", accessToken)
+                    }.getOrNull()
+                }
+            }.awaitAll()
+        }
+        seasonPages.filterNotNull().forEach { seasonPage ->
+            DisneyParser.parseEpisodeRefs(seasonPage).forEach { refs.putIfAbsent(it.pid, it) }
         }
         if (refs.isEmpty()) return emptyList()
         val body = buildJsonObject { putJsonArray("pids") { refs.keys.forEach { add(it) } } }.toString()
