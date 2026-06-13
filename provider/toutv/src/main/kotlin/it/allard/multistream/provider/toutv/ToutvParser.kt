@@ -127,8 +127,12 @@ object ToutvParser {
         val item = myview["items"].array()?.mapNotNull { it.obj() }
             ?.firstOrNull { it["url"].string()?.substringBefore('?')?.startsWith("$slug/") == true } ?: return null
         val match = SEASON_EPISODE.find(item["url"].string()?.substringBefore('?').orEmpty()) ?: return null
+        // toIntOrNull, not toInt: the regex allows an arbitrarily long digit run that would overflow
+        // Int and throw, aborting the whole watched import.
+        val season = match.groupValues[1].toIntOrNull() ?: return null
+        val episode = match.groupValues[2].toIntOrNull() ?: return null
         val completed = item["completionStatus"].obj()?.get("completed").bool() == true
-        return ToutvResume(match.groupValues[1].toInt(), match.groupValues[2].toInt(), completed)
+        return ToutvResume(season, episode, completed)
     }
 
     /** The card image URL with the literal "(_Size_)" placeholder filled with a pixel width. */
