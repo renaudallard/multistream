@@ -52,7 +52,10 @@ class SecretStore(context: Context) {
 
     fun clear(provider: ProviderId) {
         memory.remove(provider.name)
-        runCatching { prefs?.edit()?.remove(provider.name)?.apply() }
+        // commit(), not apply(): a logout must be durable. apply() defers the disk write, so a crash
+        // before it flushed would leave the secret on disk and silently log the user back in. Callers
+        // run on Dispatchers.IO.
+        runCatching { prefs?.edit()?.remove(provider.name)?.commit() }
     }
 
     private fun createEncryptedPrefs(context: Context): SharedPreferences? = try {
