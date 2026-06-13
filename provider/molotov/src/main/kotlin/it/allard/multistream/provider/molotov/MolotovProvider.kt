@@ -33,7 +33,9 @@ class MolotovProvider(
         canSearch = true,
         canBrowseByGenre = true,
         canListEpisodes = true,
-        canDeepLinkToTitle = true,
+        // No deep link: the Fubo-based app accepts no external link to a title, so launch opens the
+        // app. Keeping this false stops Settings advertising a "Deep link" capability it lacks.
+        canDeepLinkToTitle = false,
         isLiveTv = true,
         requiresRegion = true,
         requiresAuth = true,
