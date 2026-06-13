@@ -103,6 +103,10 @@ class PrimeVideoProvider(
         config.persistSecrets?.invoke(ProviderSecrets.EMPTY)
     }
 
+    override fun clearSession() {
+        cookies = null
+    }
+
     override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
         val url = ref.deepLinkHint ?: DeepLinks.primeDetail(ref.providerTitleId)
         return Launcher.viewIntent(context, url, packageName)

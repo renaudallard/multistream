@@ -20,6 +20,11 @@ object PlexImageAuth {
         runCatching { serverUrl.toHttpUrl().host }.getOrNull()?.let { tokensByHost[it] = token }
     }
 
+    /** Forget [serverUrl]'s host token (called on logout so images stop authenticating). */
+    fun unregister(serverUrl: String) {
+        runCatching { serverUrl.toHttpUrl().host }.getOrNull()?.let { tokensByHost.remove(it) }
+    }
+
     /** An OkHttp client that adds X-Plex-Token for requests to a known Plex server host. */
     fun imageClient(): OkHttpClient = buildClient().newBuilder().addInterceptor(authInterceptor).build()
 

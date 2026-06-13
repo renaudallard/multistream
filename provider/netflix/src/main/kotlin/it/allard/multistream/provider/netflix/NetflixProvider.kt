@@ -116,6 +116,11 @@ class NetflixProvider(
         return if (cookies != null) SessionState.Ready else SessionState.NeedsLogin("Netflix login required")
     }
 
+    override fun clearSession() {
+        cookies = null
+        api.reset()
+    }
+
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
         val cookie = cookies ?: return emptyList()

@@ -78,6 +78,10 @@ class MolotovProvider(
         return if (accessToken != null) SessionState.Ready else SessionState.NeedsLogin("Molotov login required")
     }
 
+    override fun clearSession() {
+        accessToken = null
+    }
+
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
         val token = accessToken ?: return emptyList()

@@ -186,6 +186,9 @@ class SettingsViewModel(
 
     fun logout(provider: StreamingProvider) {
         viewModelScope.launch(Dispatchers.IO) {
+            // Drop the in-memory session too: providers are singletons, so a cached cookie/token
+            // would otherwise keep the just-logged-out account live until the app restarts.
+            provider.clearSession()
             secrets().clear(provider.id)
             _loggedIn.update { it + (provider.id to false) }
             _message.value = appContext.getString(R.string.msg_logged_out, provider.displayName)

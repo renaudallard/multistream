@@ -46,6 +46,8 @@ class ZattooProvider(
         return ProviderSecrets(cookie = api.exportSession(), extra = mapOf("email" to username, "password" to password))
     }
 
+    override fun clearSession() = api.invalidateSession()
+
     override suspend fun ensureSession(config: ProviderConfig): SessionState {
         if (api.isLoggedIn()) return SessionState.Ready
         return sessionMutex.withLock {

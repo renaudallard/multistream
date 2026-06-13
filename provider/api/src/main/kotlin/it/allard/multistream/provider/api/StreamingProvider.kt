@@ -35,6 +35,13 @@ interface StreamingProvider {
     suspend fun ensureSession(config: ProviderConfig): SessionState = SessionState.Anonymous
 
     /**
+     * Drop any in-memory session (cached cookies/tokens). Called on logout so the change takes effect
+     * without restarting the app — providers are process-lifetime singletons, so a cached session
+     * would otherwise outlive the cleared secret. No-op for stateless providers.
+     */
+    fun clearSession() {}
+
+    /**
      * Authenticate with new credentials and return secrets to persist (encrypted), or null if the
      * provider needs no login. Called by the Settings login form.
      */

@@ -98,6 +98,13 @@ class PlexProvider(
         return SessionState.Ready
     }
 
+    override fun clearSession() {
+        server?.let { PlexImageAuth.unregister(it) }
+        server = null
+        token = null
+        accountToken = null
+    }
+
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         ensureSession(config)
         val serverUrl = server
