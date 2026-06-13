@@ -185,8 +185,10 @@ class SearchInteractor(
      * import instead of presenting it as "nothing watched".
      */
     suspend fun fetchWatched(key: TitleKey): List<EpisodeCoord>? = withContext(Dispatchers.IO) {
-        val (provider, ref) = (getTitle(key) ?: return@withContext emptyList()).watchStateProvider()
-            ?: return@withContext emptyList()
+        // A title evicted from the bounded index is a failed lookup, not "nothing watched": return
+        // null so the UI reports an import failure rather than an empty result.
+        val title = getTitle(key) ?: return@withContext null
+        val (provider, ref) = title.watchStateProvider() ?: return@withContext emptyList()
         orDefault(null) { provider.fetchWatchedEpisodes(ref, configFor(provider, ref)) }
     }
 
