@@ -123,7 +123,12 @@ object MolotovParser {
         when (element) {
             is JsonArray -> element.forEach { collectEpisodeTiles(it, out, depth + 1) }
             is JsonObject -> {
-                if (element["metadata"].obj()?.get("episode_number") != null) out.add(element)
+                // An episode tile carries its number in metadata, or (older shapes) only in the
+                // "SxxEyy" subtitle; collect either so toEpisode's subtitle fallback is reachable.
+                val hasNumber = element["metadata"].obj()?.get("episode_number") != null
+                val subtitleCoded = (element["subtitle_formatter"].obj()?.get("format").string()
+                    ?: element["subtitle"].string())?.let { SEASON_EPISODE.containsMatchIn(it) } == true
+                if (hasNumber || subtitleCoded) out.add(element)
                 element.values.forEach { collectEpisodeTiles(it, out, depth + 1) }
             }
             else -> Unit

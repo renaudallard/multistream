@@ -185,6 +185,24 @@ class MolotovApiTest {
         assertEquals(listOf(1, 2), seasons.first().episodes.map { it.episodeNumber })
     }
 
+    @Test fun getSeasons_collectsEpisodesNumberedOnlyInTheSubtitle() = runBlocking {
+        // An episode tile whose number lives only in the "SxxEyy" subtitle (no metadata.episode_number)
+        // is still collected and parsed.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"sections":[{"items":[
+                  {"type":"program","title":"X","subtitle_formatter":{"format":"S02E04 - Titre"},
+                   "metadata":{"program_id":"19460"}}
+                ]}]}
+                """.trimIndent(),
+            ),
+        )
+        val seasons = api.getSeasons("18", "19460", "AT")
+        assertEquals(2, seasons.single().seasonNumber)
+        assertEquals(listOf(4), seasons.single().episodes.map { it.episodeNumber })
+    }
+
     @Test fun getSeasons_fallsBackToSubtitleCoordinates() = runBlocking {
         // Coordinates can be absent from metadata; the "SxxEyy" subtitle then provides them.
         server.enqueue(
