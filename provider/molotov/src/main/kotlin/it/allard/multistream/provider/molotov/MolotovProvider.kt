@@ -67,7 +67,9 @@ class MolotovProvider(
 
     override suspend fun login(username: String, password: String): ProviderSecrets {
         val tokens = api.login(username, password)
-        accessToken = tokens.accessToken
+        // Under the mutex so this fresh login can't be clobbered by an in-flight background refresh
+        // (which holds the lock for its whole duration), and vice versa.
+        sessionMutex.withLock { accessToken = tokens.accessToken }
         // The password is never stored: only the access and refresh tokens are persisted.
         return ProviderSecrets(token = tokens.accessToken, refreshToken = tokens.refreshToken)
     }
