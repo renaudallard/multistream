@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,98 +56,112 @@ fun DetailScreen(titleKey: TitleKey, onBack: () -> Unit) {
         }
     }
 
-    Column(
+    // LazyColumn (not a scrolling Column): a long series can have hundreds of episodes, so only the
+    // visible rows are composed, and toggling one episode recomposes just the visible rows that read
+    // state.watched rather than the whole list.
+    LazyColumn(
         Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TextButton(onClick = onBack) { Text(stringResource(R.string.action_back)) }
+        item(key = "back") {
+            TextButton(onClick = onBack) { Text(stringResource(R.string.action_back)) }
+        }
 
         val title = state.title
         when {
-            state.loading -> CircularProgressIndicator()
-            title == null -> Text(stringResource(R.string.detail_title_not_found))
+            state.loading -> item(key = "loading") { CircularProgressIndicator() }
+            title == null -> item(key = "not-found") { Text(stringResource(R.string.detail_title_not_found)) }
             else -> {
-                Row {
-                    PosterImage(title.posterUrl, Modifier.size(width = 100.dp, height = 150.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(title.primaryTitle, style = MaterialTheme.typography.headlineSmall)
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            buildString {
-                                title.year?.let { append(it).append(" · ") }
-                                append(title.type.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() })
-                                state.status?.let { append(" · ").append(it.name.lowercase()) }
-                            },
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            title.availabilities.forEach { ProviderBadge(it.provider.name) }
+                // The fixed header (poster, metadata, synopsis, cast, action buttons) is one item, so
+                // it does not recompose when an episode below is toggled.
+                item(key = "header") {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row {
+                            PosterImage(title.posterUrl, Modifier.size(width = 100.dp, height = 150.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(title.primaryTitle, style = MaterialTheme.typography.headlineSmall)
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    buildString {
+                                        title.year?.let { append(it).append(" · ") }
+                                        append(title.type.name.lowercase().replace('_', ' ').replaceFirstChar { it.uppercase() })
+                                        state.status?.let { append(" · ").append(it.name.lowercase()) }
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    title.availabilities.forEach { ProviderBadge(it.provider.name) }
+                                }
+                            }
+                        }
+                        title.synopsis?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                        if (title.cast.isNotEmpty()) {
+                            Text(
+                                stringResource(R.string.detail_cast, title.cast.take(8).joinToString(", ")),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+
+                        TextButton(onClick = viewModel::toggleWatchlist) {
+                            Text(stringResource(if (state.inWatchlist) R.string.detail_in_watchlist else R.string.detail_add_to_watchlist))
+                        }
+
+                        title.availabilities.forEach { availability ->
+                            val provider = graph.registry.get(availability.provider)
+                            Button(
+                                onClick = { viewModel.launch(availability) },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(stringResource(R.string.detail_play_on, provider?.displayName ?: availability.provider.name))
+                            }
+                        }
+
+                        if (title.type == MediaType.MOVIE) {
+                            FilledTonalButton(onClick = viewModel::toggleMovieWatched, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(if (state.status == WatchStatus.WATCHED) R.string.detail_watched else R.string.detail_mark_watched))
+                            }
+                        } else {
+                            state.nextEpisode?.let { next ->
+                                FilledTonalButton(onClick = viewModel::resume, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.detail_resume_episode, next.season, next.episode))
+                                }
+                            }
+                            val watchStateProvider = title.availabilities.firstNotNullOfOrNull {
+                                graph.registry.get(it.provider)?.takeIf { p -> p.capabilities.canFetchWatchState }
+                            }
+                            if (watchStateProvider != null) {
+                                FilledTonalButton(onClick = viewModel::importWatched, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.detail_sync_watched, watchStateProvider.displayName))
+                                }
+                            }
+                            // Every provider that can list episodes errored: say so instead of showing
+                            // the same nothing as a title that simply has no enumerable episodes.
+                            if (state.episodesFailed && title.seasons.isEmpty()) {
+                                Text(
+                                    stringResource(R.string.detail_episodes_failed),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
                     }
                 }
-                title.synopsis?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                if (title.cast.isNotEmpty()) {
-                    Text(
-                        stringResource(R.string.detail_cast, title.cast.take(8).joinToString(", ")),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
 
-                TextButton(onClick = viewModel::toggleWatchlist) {
-                    Text(stringResource(if (state.inWatchlist) R.string.detail_in_watchlist else R.string.detail_add_to_watchlist))
-                }
-
-                title.availabilities.forEach { availability ->
-                    val provider = graph.registry.get(availability.provider)
-                    Button(
-                        onClick = { viewModel.launch(availability) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text(stringResource(R.string.detail_play_on, provider?.displayName ?: availability.provider.name))
-                    }
-                }
-
-                if (title.type == MediaType.MOVIE) {
-                    FilledTonalButton(onClick = viewModel::toggleMovieWatched, modifier = Modifier.fillMaxWidth()) {
-                        Text(stringResource(if (state.status == WatchStatus.WATCHED) R.string.detail_watched else R.string.detail_mark_watched))
-                    }
-                } else {
-                    state.nextEpisode?.let { next ->
-                        FilledTonalButton(onClick = viewModel::resume, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.detail_resume_episode, next.season, next.episode))
-                        }
-                    }
-                    val watchStateProvider = title.availabilities.firstNotNullOfOrNull {
-                        graph.registry.get(it.provider)?.takeIf { p -> p.capabilities.canFetchWatchState }
-                    }
-                    if (watchStateProvider != null) {
-                        FilledTonalButton(onClick = viewModel::importWatched, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.detail_sync_watched, watchStateProvider.displayName))
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    // Every provider that can list episodes errored: say so instead of showing the
-                    // same nothing as a title that simply has no enumerable episodes.
-                    if (state.episodesFailed && title.seasons.isEmpty()) {
-                        Text(
-                            stringResource(R.string.detail_episodes_failed),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
+                if (title.type != MediaType.MOVIE) {
                     title.seasons.forEach { season ->
-                        Text(
-                            season.title ?: stringResource(R.string.detail_season_number, season.seasonNumber),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        season.episodes.forEach { episode ->
+                        item(key = "season-${season.seasonNumber}") {
+                            Text(
+                                season.title ?: stringResource(R.string.detail_season_number, season.seasonNumber),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                        }
+                        items(season.episodes, key = { "ep-${season.seasonNumber}-${it.episodeNumber}" }) { episode ->
                             val coord = EpisodeCoord(episode.seasonNumber, episode.episodeNumber)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
