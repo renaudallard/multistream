@@ -136,8 +136,9 @@ class MolotovApiTest {
     }
 
     @Test fun getSeasons_groupsEpisodesBySeason_andSkipsOtherPrograms() = runBlocking {
-        // Episode tiles carry season/episode coordinates as strings in metadata (real payload shape);
-        // recommendation tiles for other programs are stamped with their own program_id.
+        // Episode tiles carry season/episode coordinates as strings in metadata (real payload shape).
+        // Recommendation tiles for other programs are dropped whether they carry a different
+        // program_id or (a cross-promo) none at all.
         server.enqueue(
             MockResponse().setHeader("Content-Type", "application/json").setBody(
                 """
@@ -149,7 +150,9 @@ class MolotovApiTest {
                   {"type":"program","title":"Les as de la jungle","subtitle_formatter":{"format":"S01E01 - Origines"},
                    "metadata":{"channel_id":"18","program_id":"19460","season_number":"1","episode_number":"1"}},
                   {"type":"program","title":"Autre programme",
-                   "metadata":{"channel_id":"18","program_id":"99999","season_number":"1","episode_number":"5","episode_title":"Pas le bon"}}
+                   "metadata":{"channel_id":"18","program_id":"99999","season_number":"1","episode_number":"5","episode_title":"Pas le bon"}},
+                  {"type":"program","title":"Reco sans id",
+                   "metadata":{"channel_id":"42","season_number":"1","episode_number":"9","episode_title":"Reco"}}
                 ]}]}
                 """.trimIndent(),
             ),
@@ -159,7 +162,27 @@ class MolotovApiTest {
         assertEquals(listOf(46, 47), seasons.last().episodes.map { it.episodeNumber })
         assertEquals("La fugitive", seasons.last().episodes.last().title)
         assertEquals("Origines", seasons.first().episodes.first().title) // from the SxxEyy subtitle
+        // The untagged cross-promo episode (S1E9) must not pollute season 1.
+        assertEquals(listOf(1), seasons.first().episodes.map { it.episodeNumber })
         assertTrue(server.takeRequest().path!!.contains("/v2/channels/18/programs/19460/view"))
+    }
+
+    @Test fun getSeasons_listsEpisodesEvenWhenNoneCarryProgramId() = runBlocking {
+        // Fallback: if the program's own episode tiles omit program_id, list them anyway rather than
+        // returning nothing.
+        server.enqueue(
+            MockResponse().setHeader("Content-Type", "application/json").setBody(
+                """
+                {"sections":[{"items":[
+                  {"type":"program","title":"X","metadata":{"season_number":"1","episode_number":"1","episode_title":"Un"}},
+                  {"type":"program","title":"X","metadata":{"season_number":"1","episode_number":"2","episode_title":"Deux"}}
+                ]}]}
+                """.trimIndent(),
+            ),
+        )
+        val seasons = api.getSeasons("18", "19460", "AT")
+        assertEquals(1, seasons.size)
+        assertEquals(listOf(1, 2), seasons.first().episodes.map { it.episodeNumber })
     }
 
     @Test fun getSeasons_fallsBackToSubtitleCoordinates() = runBlocking {

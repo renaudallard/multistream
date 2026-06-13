@@ -107,7 +107,11 @@ object MolotovParser {
     fun parseSeasons(root: JsonElement, programId: String): List<Season> {
         val tiles = mutableListOf<JsonObject>()
         collectEpisodeTiles(root, tiles)
-        val episodes = tiles.mapNotNull { toEpisode(it, programId) }
+        // Prefer tiles explicitly tagged with this program id, which drops foreign recommendation
+        // episodes that carry no program_id. Fall back to every episode tile only if none match, so a
+        // payload that omits program_id on the program's own episodes still lists.
+        val episodes = tiles.mapNotNull { toEpisode(it, programId, requireMatch = true) }
+            .ifEmpty { tiles.mapNotNull { toEpisode(it, programId, requireMatch = false) } }
             .distinctBy { it.seasonNumber to it.episodeNumber }
         return episodes.groupBy { it.seasonNumber }.toSortedMap().map { (number, list) ->
             Season(seasonNumber = number, episodes = list.sortedBy { it.episodeNumber })
@@ -128,9 +132,14 @@ object MolotovParser {
 
     private val SEASON_EPISODE = Regex("S(\\d+)E(\\d+)")
 
-    private fun toEpisode(tile: JsonObject, programId: String): Episode? {
+    private fun toEpisode(tile: JsonObject, programId: String, requireMatch: Boolean): Episode? {
         val metadata = tile["metadata"].obj() ?: return null
-        if (metadata["program_id"].string()?.let { it != programId } == true) return null
+        val tileProgram = metadata["program_id"].string()
+        // requireMatch drops a tile unless it is tagged with this program; otherwise only a tile
+        // tagged with a different program is dropped (a missing tag is kept).
+        if (if (requireMatch) tileProgram != programId else tileProgram != null && tileProgram != programId) {
+            return null
+        }
         val subtitle = tile["subtitle_formatter"].obj()?.get("format").string()
             ?: tile["subtitle"].string()
         val coded = subtitle?.let { SEASON_EPISODE.find(it) }
