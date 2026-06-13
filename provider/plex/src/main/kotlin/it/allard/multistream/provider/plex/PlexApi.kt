@@ -15,6 +15,9 @@ import it.allard.multistream.core.net.int
 import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
 import it.allard.multistream.provider.api.runCatchingExceptCancellation
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.JsonArray
@@ -231,20 +234,30 @@ class PlexApi(
         val sections = getJson("$base/library/sections", serverToken)
             ?.get("MediaContainer").obj()?.get("Directory").array()?.mapNotNull { it.obj() }.orEmpty()
             .filter { it["type"].string() == "movie" || it["type"].string() == "show" }
+            .mapNotNull { it["key"].string() }
         PlexImageAuth.register(serverUrl, serverToken)
-        val out = LinkedHashMap<String, UnifiedSearchResult>()
-        for (section in sections) {
-            val key = section["key"].string() ?: continue
-            val genreIds = getJson("$base/library/sections/$key/genre", serverToken)
-                ?.get("MediaContainer").obj()?.get("Directory").array()?.mapNotNull { it.obj() }.orEmpty()
-                .filter { g -> genreAliases.any { it.equals(g["title"].string(), ignoreCase = true) } }
-                .mapNotNull { it["key"].string() ?: it["id"].int()?.toString() }
-            for (genreId in genreIds) {
-                getJson("$base/library/sections/$key/all?genre=$genreId&limit=30", serverToken)
-                    ?.let { PlexParser.parse(it, imageBase = serverUrl) }
-                    ?.forEach { out.putIfAbsent(it.ref.providerTitleId, it) }
-            }
+        // Two concurrent phases (instead of a nested sequential loop): resolve each section's matching
+        // genre ids, then fetch every section/genre page. awaitAll keeps section/genre order, so the
+        // dedup (first occurrence wins) is unchanged.
+        val pages = coroutineScope {
+            val perSection = sections.map { key ->
+                async {
+                    val genreIds = getJson("$base/library/sections/$key/genre", serverToken)
+                        ?.get("MediaContainer").obj()?.get("Directory").array()?.mapNotNull { it.obj() }.orEmpty()
+                        .filter { g -> genreAliases.any { it.equals(g["title"].string(), ignoreCase = true) } }
+                        .mapNotNull { it["key"].string() ?: it["id"].int()?.toString() }
+                    key to genreIds
+                }
+            }.awaitAll()
+            perSection.flatMap { (key, ids) -> ids.map { key to it } }.map { (key, genreId) ->
+                async {
+                    getJson("$base/library/sections/$key/all?genre=$genreId&limit=30", serverToken)
+                        ?.let { PlexParser.parse(it, imageBase = serverUrl) }.orEmpty()
+                }
+            }.awaitAll()
         }
+        val out = LinkedHashMap<String, UnifiedSearchResult>()
+        pages.forEach { page -> page.forEach { out.putIfAbsent(it.ref.providerTitleId, it) } }
         return out.values.toList()
     }
 
