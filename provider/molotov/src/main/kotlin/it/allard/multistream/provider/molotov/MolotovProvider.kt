@@ -139,10 +139,11 @@ class MolotovProvider(
         )
     }
 
-    override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? {
-        val hint = ref.deepLinkHint ?: return null
-        return Launcher.viewIntent(context, hint, packageName)
-    }
+    // The Fubo-based Molotov app exposes no external deep link to a program: its handler posts the
+    // URL to a server resolver that answers "no url found" for every content URL, so any deep link
+    // would just bounce to the home screen anyway. Open the app directly instead.
+    override fun buildLaunchIntent(context: Context, ref: ProviderRef, episode: EpisodeCoord?): Intent? =
+        Launcher.launchApp(context, packageName)
 
     override fun launchAppFallback(context: Context, query: String?): Intent? =
         Launcher.launchApp(context, packageName)

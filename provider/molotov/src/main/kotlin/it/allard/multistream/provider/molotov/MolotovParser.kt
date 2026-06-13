@@ -71,27 +71,19 @@ object MolotovParser {
             else -> MediaType.SERIES
         }
         // A channel tile's metadata describes its current broadcast, not the tile itself, so the
-        // program/channel ids and the program deep link only apply to content tiles.
+        // program/channel ids only apply to content tiles.
         val metadata = tile["metadata"].obj().takeIf { media != MediaType.LIVE_CHANNEL }
         val programId = metadata?.get("program_id").string()
         val channelId = metadata?.get("channel_id").string()
         // Episode listing needs the channel-scoped program view endpoint, so both ids ride in the
         // title id when known; older slug-only refs simply cannot list episodes.
         val titleId = if (channelId != null && programId != null) "$channelId:$programId" else id
-        // Deep link onto the program page. The Fubo-based Molotov app routes only three URL shapes
-        // (manifest intent filters): www.molotov.tv/deeplink*, the molotov:// scheme, and
-        // app.molotov.tv with any path AS LONG AS an `al` query param is present (the app checks only
-        // that it is non-null). A www.molotov.tv/fr_fr/p/... link matches none of these, so it fell
-        // through to a bare app launch onto the home screen. app.molotov.tv carries the same
-        // /fr_fr/p/<program_id>/<slug> path the website resolves, so it lands on the show.
-        val deepLink = if (programId != null && slug != null) {
-            "https://app.molotov.tv/fr_fr/p/$programId/$slug?al=1"
-        } else {
-            null
-        }
+        // No deep link: the Fubo-based Molotov app accepts no external link to a program. Its handler
+        // posts the URL to a server resolver that returns "no url found" for every content URL
+        // (molotov.tv and fubo.tv alike), so launch just opens the app (see MolotovProvider).
         return UnifiedSearchResult(
             provider = ProviderId.MOLOTOV,
-            ref = ProviderRef(ProviderId.MOLOTOV, titleId, deepLink, region),
+            ref = ProviderRef(ProviderId.MOLOTOV, titleId, deepLinkHint = null, region = region),
             title = title,
             type = media,
             posterUrl = posterImage(tile["image_bundle"]),

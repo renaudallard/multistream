@@ -56,10 +56,10 @@ class MolotovApiTest {
         assertEquals(2, results.size) // person is filtered out
         val lupin = results.first { it.title == "Lupin" }
         assertEquals(MediaType.SERIES, lupin.type)
-        // app.molotov.tv is the host the app routes to (any path) when the `al` param is present.
-        assertEquals("https://app.molotov.tv/fr_fr/p/4242/lupin?al=1", lupin.ref.deepLinkHint)
+        // The new app accepts no external program deep link, so launch just opens the app.
+        assertEquals(null, lupin.ref.deepLinkHint)
         assertEquals("3:4242", lupin.ref.providerTitleId) // channel:program, for the episode list
-        // A tile without channel/program metadata keeps the slug id and gets no deep link.
+        // A tile without channel/program metadata keeps the slug id (and still no deep link).
         val oss = results.first { it.title == "OSS 117" }
         assertEquals("oss117", oss.ref.providerTitleId)
         assertEquals(null, oss.ref.deepLinkHint)
@@ -130,7 +130,8 @@ class MolotovApiTest {
         assertEquals(2, results.size)
         val film = results.first { it.title == "Comme chien et chat" }
         assertEquals(MediaType.MOVIE, film.type) // a program in the Films category is a movie
-        assertEquals("https://app.molotov.tv/fr_fr/p/343524/comme-chien-et-chat?al=1", film.ref.deepLinkHint)
+        assertEquals("42:343524", film.ref.providerTitleId) // channel:program, for the episode list
+        assertEquals(null, film.ref.deepLinkHint)
         assertTrue(server.takeRequest().path!!.contains("/v2/categories/1/sections/kind_movies_1"))
     }
 

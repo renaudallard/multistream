@@ -73,7 +73,7 @@ shell for phone and Android TV.
 | **Netflix** | ✅ | 8 | title page | cast, summary | WebView \* | title and in-app-search deep links; search verified on a real device, the session can need a fresh login after heavy use |
 | **Disney+** | ✅ | 10 | title page | cast, summary | email / password | verified on a real device; films and series are typed correctly, so episodes list only for series |
 | **Prime Video** | ✅ | 10 | detail page | summary | WebView \* | verified on a real device; the TV build is bundled and the mobile package is tried on phones; web-search art is 16:9 (no portrait) |
-| **Molotov** | ✅ | 9 | program page | summary | email / password | verified on a real device; lists episodes from the channel-scoped program page; its API carries no cast |
+| **Molotov** | ✅ | 9 | opens app | summary | email / password | verified on a real device; lists episodes from the channel-scoped program page; the new Fubo-based app has no external per-title deep link, so launch opens the app; its API carries no cast |
 | **Zattoo** | ✅ | — | live channel | — | email / password | live TV: deep-links to the program's live channel (`zattoo.com/live/<cid>`); the guide carries no synopsis |
 | **Arte** | ✅ | 2 | title page | summary | optional | free public API; the region selects the catalog language |
 | **Plex** | ✅ | 10 † | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
@@ -154,9 +154,9 @@ the **title page** and the user presses play inside the official app.
 - **Disney+** `https://www.disneyplus.com/browse/entity-<id>`, with `disneyplus://<id>` as a fallback.
 - **Prime Video** `https://app.primevideo.com/detail?gti=<ASIN>`. The bundled APK is the TV
   ("living-room") build; on phones the mobile package `com.amazon.avod.thirdpartyclient` is tried.
-- **Molotov** `https://app.molotov.tv/fr_fr/p/<program_id>/<slug>?al=1` links: the Fubo-based app
-  routes the `app.molotov.tv` host on any path (the `www` host only routes its `/deeplink` prefix),
-  and requires the `al` query param to be present, so the link lands on the program page.
+- **Molotov** opens the app (no per-title deep link). The current Fubo-based app forwards any
+  incoming link to a server resolver that returns "no url found" for every content URL (both
+  `molotov.tv` and `fubo.tv`), so no constructed link can open a specific show; launch opens the app.
 - **Zattoo** `https://zattoo.com/live/<cid>` opens the program's live channel (the app catches every
   `zattoo.com` URL; the `/live` route comes from its bundle).
 - **Arte** `https://www.arte.tv/<lang>/videos/<id>/`, with `arte://collection/<id>` as a fallback.
