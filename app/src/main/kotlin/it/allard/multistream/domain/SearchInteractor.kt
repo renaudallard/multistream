@@ -132,38 +132,62 @@ class SearchInteractor(
      * detail-capable provider, and (for a series with none) its seasons from the best episode provider.
      */
     suspend fun loadDetails(key: TitleKey): TitleDetails? = withContext(Dispatchers.IO) {
-        var episodesFailed = false
-        var title = getTitle(key) ?: return@withContext null
-        if (title.synopsis == null || title.cast.isEmpty()) {
-            title.detailProvider()?.let { (provider, ref) ->
-                orDefault(null) { provider.getDetails(ref, configFor(provider, ref)) }?.let { d ->
-                    title = title.copy(
-                        // The provider detail knows movie vs series authoritatively (search may guess);
-                        // applying it stops films being sent to getSeasons for a phantom episode list.
-                        type = d.type,
-                        synopsis = title.synopsis ?: d.synopsis,
-                        cast = title.cast.ifEmpty { d.cast },
-                        year = title.year ?: d.year,
-                        posterUrl = title.posterUrl ?: d.posterUrl,
-                    )
+        val base = getTitle(key) ?: return@withContext null
+        coroutineScope {
+            // Overlap the two network round-trips: when the search-guessed title already looks like a
+            // series whose episodes we need, start enumerating them in parallel with the detail fetch
+            // instead of waiting for detail first. If detail later corrects the type to a movie, the
+            // speculative work is cancelled and discarded.
+            val speculativeSeasons = if (base.type == MediaType.SERIES && base.seasons.isEmpty()) {
+                async { fetchSeasons(base) }
+            } else {
+                null
+            }
+
+            var title = base
+            if (title.synopsis == null || title.cast.isEmpty()) {
+                title.detailProvider()?.let { (provider, ref) ->
+                    orDefault(null) { provider.getDetails(ref, configFor(provider, ref)) }?.let { d ->
+                        title = title.copy(
+                            // The provider detail knows movie vs series authoritatively (search may guess);
+                            // applying it stops films being sent to getSeasons for a phantom episode list.
+                            type = d.type,
+                            synopsis = title.synopsis ?: d.synopsis,
+                            cast = title.cast.ifEmpty { d.cast },
+                            year = title.year ?: d.year,
+                            posterUrl = title.posterUrl ?: d.posterUrl,
+                        )
+                    }
                 }
             }
-        }
-        if (title.type == MediaType.SERIES && title.seasons.isEmpty()) {
-            // Enumerate episodes on every provider that can list them, in parallel, and union the
-            // results: a provider with the full run fills the gaps of one that only carries part of it.
-            val perProvider = coroutineScope {
-                title.episodeProviders().map { (provider, ref) ->
-                    async { orDefault(null) { provider.getSeasons(ref, configFor(provider, ref)) } }
-                }.awaitAll()
+
+            var episodesFailed = false
+            if (title.type == MediaType.SERIES && title.seasons.isEmpty()) {
+                // Reuse the speculative fetch when it was started for this same title; otherwise (the
+                // guess was a movie but detail says series) enumerate now.
+                val perProvider = speculativeSeasons?.await() ?: fetchSeasons(title)
+                // All providers erroring is a failed listing; an empty but successful one means the
+                // title genuinely has no enumerable episodes, so no warning is warranted.
+                episodesFailed = perProvider.isNotEmpty() && perProvider.all { it == null }
+                val merged = mergeSeasons(perProvider.filterNotNull())
+                if (merged.isNotEmpty()) title = title.copy(seasons = merged)
+            } else {
+                // Detail corrected the guess to a movie: drop the speculative episode fetch.
+                speculativeSeasons?.cancel()
             }
-            // All providers erroring is a failed listing; an empty but successful one means the
-            // title genuinely has no enumerable episodes, so no warning is warranted.
-            episodesFailed = perProvider.isNotEmpty() && perProvider.all { it == null }
-            val merged = mergeSeasons(perProvider.filterNotNull())
-            if (merged.isNotEmpty()) title = title.copy(seasons = merged)
+            TitleDetails(title, episodesFailed)
         }
-        TitleDetails(title, episodesFailed)
+    }
+
+    /**
+     * Enumerate episodes on every provider that can list them, in parallel, and union the results: a
+     * provider with the full run fills the gaps of one that only carries part of it. Null entries are
+     * providers that failed (vs an empty list, which is a successful "no episodes").
+     */
+    private suspend fun fetchSeasons(title: Title): List<List<Season>?> = coroutineScope {
+        title.episodeProviders().map { (provider, ref) ->
+            async { orDefault(null) { provider.getSeasons(ref, configFor(provider, ref)) } }
+        }.awaitAll()
     }
 
     private fun Title.detailProvider(): Pair<StreamingProvider, ProviderRef>? =
