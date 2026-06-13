@@ -114,6 +114,9 @@ internal fun parseUpdate(body: String, currentVersion: String): UpdateInfo? {
 
 /** True when [latest] is a strictly higher dotted version than [current]; a leading "v" is ignored. */
 internal fun isNewer(latest: String, current: String): Boolean {
+    // A blank current version (PackageManager returned no versionName) would otherwise parse to 0 and
+    // make every release look newer; don't offer an update when we can't tell what we're running.
+    if (current.isBlank()) return false
     val l = latest.versionParts()
     val c = current.versionParts()
     for (i in 0 until maxOf(l.size, c.size)) {

@@ -73,4 +73,6 @@ class UpdateCheckerTest {
     @Test fun unequalLengthShorterIsNotNewer() = assertFalse(isNewer("0.2", "0.2.1"))
 
     @Test fun unequalLengthLongerCanBeNewer() = assertTrue(isNewer("0.2.1", "0.2"))
+
+    @Test fun blankCurrentVersionIsNeverOlder() = assertFalse(isNewer("0.2.1", ""))
 }
