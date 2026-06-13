@@ -26,12 +26,18 @@ val NetJson: Json = Json {
     explicitNulls = false
 }
 
-fun buildClient(cookieJar: CookieJar = CookieJar.NO_COOKIES): OkHttpClient =
+// One shared base so every provider's client reuses a single connection pool and dispatcher thread
+// pool (newBuilder shares both) instead of each spinning up its own; the cookie jar still varies
+// per client, which is independent of connection reuse.
+private val baseClient: OkHttpClient by lazy {
     OkHttpClient.Builder()
-        .cookieJar(cookieJar)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .build()
+}
+
+fun buildClient(cookieJar: CookieJar = CookieJar.NO_COOKIES): OkHttpClient =
+    baseClient.newBuilder().cookieJar(cookieJar).build()
 
 /** Minimal in-memory cookie jar keyed by host; enough for a single logged-in session. */
 class InMemoryCookieJar : CookieJar {
