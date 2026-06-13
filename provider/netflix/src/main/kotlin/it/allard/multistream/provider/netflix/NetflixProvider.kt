@@ -55,7 +55,7 @@ class NetflixProvider(
             persistRotated(cookie, config)
             results
         } catch (e: NetflixApiException) {
-            if (e.authError) api.invalidate()
+            if (e.authError) dropSession(config)
             throw e
         }
     }
@@ -74,7 +74,7 @@ class NetflixProvider(
             persistRotated(cookie, config)
             details
         } catch (e: NetflixApiException) {
-            if (e.authError) api.invalidate()
+            if (e.authError) dropSession(config)
             null
         }
     }
@@ -89,7 +89,7 @@ class NetflixProvider(
         } catch (e: NetflixApiException) {
             // Rethrow like search does: a dead session must surface as a failed import, not as
             // "nothing watched".
-            if (e.authError) api.invalidate()
+            if (e.authError) dropSession(config)
             throw e
         }
     }
@@ -121,6 +121,18 @@ class NetflixProvider(
         api.reset()
     }
 
+    /**
+     * Drop the session on an auth rejection. Netflix has no refresh token, so a 401 means the cookie
+     * is dead: clear it in memory and on disk (and the cookie jar) so the next call returns
+     * NeedsLogin and the user is prompted to sign in again, instead of failing on the same dead
+     * cookie forever.
+     */
+    private fun dropSession(config: ProviderConfig) {
+        cookies = null
+        api.reset()
+        config.persistSecrets?.invoke(ProviderSecrets.EMPTY)
+    }
+
     override suspend fun search(query: String, region: Region, config: ProviderConfig): List<UnifiedSearchResult> {
         if (ensureSession(config) !is SessionState.Ready) return emptyList()
         val cookie = cookies ?: return emptyList()
@@ -129,7 +141,7 @@ class NetflixProvider(
             persistRotated(cookie, config)
             results
         } catch (e: NetflixApiException) {
-            if (e.authError) api.invalidate()
+            if (e.authError) dropSession(config)
             throw e
         }
     }
