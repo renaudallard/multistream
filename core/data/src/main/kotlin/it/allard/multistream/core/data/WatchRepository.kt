@@ -85,7 +85,6 @@ class WatchRepository(private val db: MultistreamDatabase) {
                         provider = a.provider.name,
                         providerTitleId = a.ref.providerTitleId,
                         deepLinkHint = a.ref.deepLinkHint,
-                        preferred = false,
                     )
                 },
             )

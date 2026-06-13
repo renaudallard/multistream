@@ -40,8 +40,6 @@ data class EpisodeProgressEntity(
     val season: Int,
     val episode: Int,
     val watched: Boolean,
-    val positionMs: Long = 0,
-    val durationMs: Long = 0,
     val watchedAt: Long? = null,
 )
 
@@ -55,6 +53,8 @@ data class EpisodeProgressEntity(
             onDelete = ForeignKey.CASCADE,
         ),
     ],
+    // Continue-Watching orders by this column.
+    indices = [Index("lastActivityAt")],
 )
 data class SeriesProgressEntity(
     @PrimaryKey val titleKey: String,
@@ -83,7 +83,6 @@ data class TitleProviderPrefEntity(
     val provider: String,
     val providerTitleId: String,
     val deepLinkHint: String?,
-    val preferred: Boolean,
 )
 
 /** Join row for the Continue-Watching feed (tracked title + denormalized next-episode pointer). */

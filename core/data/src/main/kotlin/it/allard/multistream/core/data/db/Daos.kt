@@ -17,7 +17,7 @@ interface WatchDao {
 
     @Upsert suspend fun upsertProviderPrefs(prefs: List<TitleProviderPrefEntity>)
 
-    @Query("SELECT * FROM title_provider_pref WHERE titleKey = :key ORDER BY preferred DESC")
+    @Query("SELECT * FROM title_provider_pref WHERE titleKey = :key ORDER BY provider")
     suspend fun providerPrefs(key: String): List<TitleProviderPrefEntity>
 
     @Query("UPDATE tracked_title SET inWatchlist = :inList, updatedAt = :ts WHERE titleKey = :key")
