@@ -19,8 +19,8 @@ android {
         applicationId = "it.allard.multistream"
         minSdk = 24
         targetSdk = 35
-        versionCode = 25
-        versionName = "0.2.15"
+        versionCode = 26
+        versionName = "0.2.16"
     }
 
     signingConfigs {
