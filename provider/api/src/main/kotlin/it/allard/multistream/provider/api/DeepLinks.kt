@@ -17,5 +17,8 @@ object DeepLinks {
 
     fun primeDetail(asin: String) = "https://app.primevideo.com/detail?gti=$asin"
 
+    /** etincelle (alternative Molotov client) deep link to a show by its Fubo kind and id. */
+    fun etincelle(kind: String, id: String) = "etincelle://$kind/$id"
+
     private fun encode(value: String): String = URLEncoder.encode(value, "UTF-8")
 }

@@ -73,7 +73,7 @@ shell for phone and Android TV.
 | **Netflix** | ✅ | 8 | title page | cast, summary | WebView \* | title and in-app-search deep links; search verified on a real device, the session can need a fresh login after heavy use |
 | **Disney+** | ✅ | 10 | title page | cast, summary | email / password | verified on a real device; films and series are typed correctly, so episodes list only for series |
 | **Prime Video** | ✅ | 10 | detail page | summary | WebView \* | verified on a real device; the TV build is bundled and the mobile package is tried on phones; web-search art is 16:9 (no portrait) |
-| **Molotov** | ✅ | 9 | opens app | summary | email / password | verified on a real device; lists episodes from the channel-scoped program page; the new Fubo-based app has no external per-title deep link, so launch opens the app; its API carries no cast |
+| **Molotov** | ✅ | 10 | étincelle / app | — | email / password | on the Fubo backend the current Molotov app uses; search, genre browse (via catalog search) and a series' catch-up episodes verified against the live Fubo API; deep-links a title into the **étincelle** app (`etincelle://{kind}/<id>`) when installed, else opens the official app |
 | **Zattoo** | ✅ | — | live channel | — | email / password | live TV: deep-links to the program's live channel (`zattoo.com/live/<cid>`); the guide carries no synopsis |
 | **Arte** | ✅ | 2 | title page | summary | optional | free public API; the region selects the catalog language |
 | **Plex** | ✅ | 10 † | watch.plex.tv | cast, summary | optional | anonymous Discover; the device sign-in auto-discovers and searches your own server |
@@ -93,8 +93,10 @@ ICI Tou.tv search without a login. `Details` = what the title screen adds when y
 plot summary, and the billed cast where the service exposes it (a release year shows wherever search
 returns one); `—` providers show the poster, title and year only.
 
-Live search is verified on a real device across all eleven services, and genre browse on every service
-that supports it. The search box carries a clear button that wipes the query in one tap, and leading or
+Live search is verified on a real device across the services, and genre browse on every service that
+supports it. (Molotov runs on the Fubo backend the current app uses; its search, genre browse and
+episode listing are verified against the live Fubo API with a Molotov Extra account.) The search box
+carries a clear button that wipes the query in one tap, and leading or
 trailing spaces are stripped before the search runs. Leave the search box empty and the genre chips
 appear; tapping one fans out to the providers that carry that genre and merges the catalogs, exactly
 like a text search. Genre results come back sorted alphabetically with an A-Z letter strip down the
@@ -106,8 +108,8 @@ sample catalog also ships for an offline demo; live search itself runs only on a
 Opening a series fetches its episodes from every provider that can enumerate them and unions them by
 season and episode number, so a service carrying the full run completes one that holds only part of
 it. Plex lists episodes from your own server; Prime Video reads them from the signed-in detail page,
-fetching one page per season so every season is covered; Molotov reads them from the channel-scoped
-program page its search tiles point to.
+fetching one page per season so every season is covered; Molotov reads a series' catch-up episodes
+from its "Regarder maintenant" tab on the Fubo backend.
 
 Where a service exposes it, the detail screen also offers "Sync watched from <service>", which
 imports which episodes you have already watched there into your local history. This is verified for
@@ -154,9 +156,12 @@ the **title page** and the user presses play inside the official app.
 - **Disney+** `https://www.disneyplus.com/browse/entity-<id>`, with `disneyplus://<id>` as a fallback.
 - **Prime Video** `https://app.primevideo.com/detail?gti=<ASIN>`. The bundled APK is the TV
   ("living-room") build; on phones the mobile package `com.amazon.avod.thirdpartyclient` is tried.
-- **Molotov** opens the app (no per-title deep link). The current Fubo-based app forwards any
-  incoming link to a server resolver that returns "no url found" for every content URL (both
-  `molotov.tv` and `fubo.tv`), so no constructed link can open a specific show; launch opens the app.
+- **Molotov** `etincelle://{kind}/<id>` (kind = `series`, `program` or `channel`; the id is the Fubo
+  papi id carried by every search/browse result) opens the show's detail page in the **étincelle** app
+  (`it.allard.etincelle`), an alternative Molotov client. étincelle is preferred whenever it is
+  installed; otherwise launch opens the official Molotov app (`tv.molotov.app`), which accepts no
+  working per-title deep link of its own. étincelle's TV build registers no deep-link filter, so on a
+  TV it is opened bare.
 - **Zattoo** `https://zattoo.com/live/<cid>` opens the program's live channel (the app catches every
   `zattoo.com` URL; the `/live` route comes from its bundle).
 - **Arte** `https://www.arte.tv/<lang>/videos/<id>/`, with `arte://collection/<id>` as a fallback.

@@ -20,4 +20,10 @@ class DeepLinksTest {
     @Test fun prime_format() {
         assertEquals("https://app.primevideo.com/detail?gti=B0ABCDEFG", DeepLinks.primeDetail("B0ABCDEFG"))
     }
+
+    @Test fun etincelle_formats() {
+        assertEquals("etincelle://series/lupin", DeepLinks.etincelle("series", "lupin"))
+        assertEquals("etincelle://program/VOD_42", DeepLinks.etincelle("program", "VOD_42"))
+        assertEquals("etincelle://channel/600019", DeepLinks.etincelle("channel", "600019"))
+    }
 }

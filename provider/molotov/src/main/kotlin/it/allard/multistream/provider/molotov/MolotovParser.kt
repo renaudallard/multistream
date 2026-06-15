@@ -8,110 +8,104 @@ import it.allard.multistream.core.model.ProviderRef
 import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
+import it.allard.multistream.core.net.array
 import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
+import it.allard.multistream.provider.api.DeepLinks
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
+import java.net.URLDecoder
 
 /**
- * Tolerant walker for Molotov's section/tile search responses (shapes vary: sections/items/results
- * or a bare list). Collects content tiles and maps them to the unified model.
+ * Walks a Fubo server-driven page (`papi/v1/...`) and maps its content cards to the unified model.
+ * Every deep-linkable card carries its target in an `actions.on_click[].endpoint.url` of the form
+ * `program-details/{series|program|channel}/{id}`; that (kind, id) is exactly what an
+ * `etincelle://{kind}/{id}` deep link needs, so one set of regexes drives both the typing and the
+ * launch link. Mirrors etincelle's PageDtos mapping.
  */
 object MolotovParser {
-    private val CONTENT_TYPES = setOf("program", "vod", "episode", "season", "channel")
-    // A single-genre browse nests its tiles under `section` (singular); search and category pages use
-    // `sections`/`items`/`results`/`catalog`.
-    private val CONTAINER_KEYS = listOf("sections", "section", "items", "results", "catalog")
+    private val CHANNEL = Regex("""program-details/channel/(\d+)""")
+    private val PROGRAM = Regex("""program-details/program/([\w-]+)""")
+    private val SERIES = Regex("""program-details/series/([\w-]+)""")
+    private val TRK_TITLE = Regex("""[?&]trkOriginElement=([^&]+)""")
 
-    // A "program" tile covers both films and series; its metadata category tells them apart. Molotov's
-    // Films category is id 1 (verified against the live API), so a program in that category is a movie.
-    private const val FILM_CATEGORY_ID = "1"
-
-    // Cap recursion depth so a deeply nested response can't overflow the stack.
+    // Cap recursion so a deeply nested (or hostile) response can't overflow the stack.
     private const val MAX_DEPTH = 100
 
-    fun parse(root: JsonElement, region: Region): List<UnifiedSearchResult> {
-        val tiles = mutableListOf<JsonObject>()
-        collect(root, tiles)
+    fun parsePage(root: JsonElement, region: Region): List<UnifiedSearchResult> {
+        val cards = mutableListOf<JsonObject>()
+        collectCards(root, cards)
         val seen = HashSet<String>()
-        // Dedup by slug/id, not by the ref's title id: the same program carried on several channels
-        // shares the slug but gets a channel-scoped title id.
-        return tiles.mapNotNull { tile ->
-            toResult(tile, region)?.takeIf { seen.add(tile["slug"].string() ?: tile["id"].string() ?: "") }
-        }
+        // The same show appears once per channel it airs on; keep one card per title.
+        return cards.mapNotNull { toResult(it, region) }
+            .filter { seen.add(it.title.trim().lowercase()) }
     }
 
-    private fun collect(element: JsonElement, out: MutableList<JsonObject>, depth: Int = 0) {
+    private fun collectCards(element: JsonElement, out: MutableList<JsonObject>, depth: Int = 0) {
         if (depth > MAX_DEPTH) return
         when (element) {
-            is JsonArray -> element.forEach { collect(it, out, depth + 1) }
+            is JsonArray -> element.forEach { collectCards(it, out, depth + 1) }
             is JsonObject -> {
-                if (element["type"].string() in CONTENT_TYPES && element["title"].string() != null) {
-                    out.add(element)
-                }
-                CONTAINER_KEYS.forEach { key -> element[key]?.let { collect(it, out, depth + 1) } }
+                if (deepLinkUrl(element) != null) out.add(element)
+                element.values.forEach { collectCards(it, out, depth + 1) }
             }
             else -> Unit
         }
     }
 
-    private fun toResult(tile: JsonObject, region: Region): UnifiedSearchResult? {
-        val title = tile["title"].string()?.takeIf { it.isNotBlank() } ?: return null
-        val type = tile["type"].string() ?: return null
-        val slug = tile["slug"].string()
-        val id = slug ?: tile["id"].string() ?: return null
-        val media = when (type) {
-            "vod" -> MediaType.MOVIE
-            "episode" -> MediaType.EPISODE
-            "channel" -> MediaType.LIVE_CHANNEL
-            // A program is a film only when its category says so; otherwise it is a series.
-            "program" -> if (isFilm(tile)) MediaType.MOVIE else MediaType.SERIES
-            else -> MediaType.SERIES
+    /** The card's first on_click endpoint url, but only when it points at a deep-linkable detail. */
+    private fun deepLinkUrl(card: JsonObject): String? {
+        val url = card["actions"].obj()?.get("on_click").array()
+            ?.firstNotNullOfOrNull { it.obj()?.get("endpoint").obj()?.get("url").string() }
+            ?: return null
+        return url.takeIf { CHANNEL.containsMatchIn(it) || PROGRAM.containsMatchIn(it) || SERIES.containsMatchIn(it) }
+    }
+
+    private fun toResult(card: JsonObject, region: Region): UnifiedSearchResult? {
+        val url = deepLinkUrl(card) ?: return null
+        // A channel is live TV; a series lists episodes; a program is a single playable.
+        val (kind, id, media) = when {
+            CHANNEL.find(url) != null -> Triple("channel", CHANNEL.find(url)!!.groupValues[1], MediaType.LIVE_CHANNEL)
+            SERIES.find(url) != null -> Triple("series", SERIES.find(url)!!.groupValues[1], MediaType.SERIES)
+            PROGRAM.find(url) != null -> Triple("program", PROGRAM.find(url)!!.groupValues[1], MediaType.MOVIE)
+            else -> return null
         }
-        // A channel tile's metadata describes its current broadcast, not the tile itself, so the
-        // program/channel ids only apply to content tiles.
-        val metadata = tile["metadata"].obj().takeIf { media != MediaType.LIVE_CHANNEL }
-        val programId = metadata?.get("program_id").string()
-        val channelId = metadata?.get("channel_id").string()
-        // Episode listing needs the channel-scoped program view endpoint, so both ids ride in the
-        // title id when known; older slug-only refs simply cannot list episodes.
-        val titleId = if (channelId != null && programId != null) "$channelId:$programId" else id
-        // No deep link: the Fubo-based Molotov app accepts no external link to a program. Its handler
-        // posts the URL to a server resolver that returns "no url found" for every content URL
-        // (molotov.tv and fubo.tv alike), so launch just opens the app (see MolotovProvider).
+        val title = cardTitle(card, url) ?: return null
         return UnifiedSearchResult(
             provider = ProviderId.MOLOTOV,
-            ref = ProviderRef(ProviderId.MOLOTOV, titleId, deepLinkHint = null, region = region),
+            ref = ProviderRef(
+                provider = ProviderId.MOLOTOV,
+                providerTitleId = "$kind:$id",
+                deepLinkHint = DeepLinks.etincelle(kind, id),
+                region = region,
+            ),
             title = title,
             type = media,
-            posterUrl = posterImage(tile["image_bundle"]),
-            synopsis = tile["description"].string()?.takeIf { it.isNotBlank() }
-                ?: tile["description_formatter"].obj()?.get("format").string()?.takeIf { it.isNotBlank() },
+            posterUrl = cardImage(card),
             availabilityType = if (media == MediaType.LIVE_CHANNEL) AvailabilityType.LIVE else AvailabilityType.SUBSCRIPTION,
         )
     }
 
-    /** A program tile is a film when its metadata category is Molotov's Films category. */
-    private fun isFilm(tile: JsonObject): Boolean =
-        tile["metadata"].obj()?.get("program_category_id").string() == FILM_CATEGORY_ID
+    // --- Episodes (a series' "Regarder maintenant" / catch-up tab) ---
+
+    private const val LIST_ITEM_WIDE = "list-item-wide"
+    // Episode labels read e.g. "S1 E5 - Titre", "S01E05", or "Saison 1 Épisode 5"; pull the coordinates
+    // from whichever shape is present, falling back to list order when the label carries no number.
+    private val SEASON_EPISODE = Regex("""S\s*(\d+)\s*[\s.\-·]*E\s*(\d+)""", RegexOption.IGNORE_CASE)
+    private val SAISON_EPISODE = Regex("""saison\s*(\d+).*?[ée]pisode\s*(\d+)""", RegexOption.IGNORE_CASE)
+    private val EPISODE_ONLY = Regex("""[ée]pisode\s*(\d+)""", RegexOption.IGNORE_CASE)
 
     /**
-     * Program view page (v2/channels/{channel}/programs/{program}/view) -> seasons with episodes.
-     * Episode tiles carry their coordinates in `metadata` (season_number/episode_number as strings,
-     * with the channel and program ids alongside); the subtitle's "SxxEyy - title" text is the
-     * fallback. The page can also tile other programs (recommendations), so anything stamped with a
-     * different program_id is skipped.
+     * Episodes from a series' catch-up tab. Only `list-item-wide` sections are episode lists, so the
+     * detail page's recommendation carousels ("À voir aussi") are skipped. Mirrors etincelle's
+     * `toEpisodes()`, but recovers the season/episode coordinates the unified model needs.
      */
-    fun parseSeasons(root: JsonElement, programId: String): List<Season> {
+    fun parseSeasons(root: JsonElement): List<Season> {
         val tiles = mutableListOf<JsonObject>()
         collectEpisodeTiles(root, tiles)
-        // Prefer tiles explicitly tagged with this program id, which drops foreign recommendation
-        // episodes that carry no program_id. Fall back to every episode tile only if none match, so a
-        // payload that omits program_id on the program's own episodes still lists.
-        val episodes = tiles.mapNotNull { toEpisode(it, programId, requireMatch = true) }
-            .ifEmpty { tiles.mapNotNull { toEpisode(it, programId, requireMatch = false) } }
+        var running = 0
+        val episodes = tiles.mapNotNull { toEpisode(it) { ++running } }
             .distinctBy { it.seasonNumber to it.episodeNumber }
         return episodes.groupBy { it.seasonNumber }.toSortedMap().map { (number, list) ->
             Season(seasonNumber = number, episodes = list.sortedBy { it.episodeNumber })
@@ -123,67 +117,71 @@ object MolotovParser {
         when (element) {
             is JsonArray -> element.forEach { collectEpisodeTiles(it, out, depth + 1) }
             is JsonObject -> {
-                // An episode tile carries its number in metadata, or (older shapes) only in the
-                // "SxxEyy" subtitle; collect either so toEpisode's subtitle fallback is reachable.
-                val hasNumber = element["metadata"].obj()?.get("episode_number") != null
-                val subtitleCoded = (element["subtitle_formatter"].obj()?.get("format").string()
-                    ?: element["subtitle"].string())?.let { SEASON_EPISODE.containsMatchIn(it) } == true
-                if (hasNumber || subtitleCoded) out.add(element)
+                if (element["component_type"].string() == LIST_ITEM_WIDE) {
+                    element["components"].array()?.forEach { card -> card.obj()?.let(out::add) }
+                }
                 element.values.forEach { collectEpisodeTiles(it, out, depth + 1) }
             }
             else -> Unit
         }
     }
 
-    private val SEASON_EPISODE = Regex("S(\\d+)E(\\d+)")
-
-    private fun toEpisode(tile: JsonObject, programId: String, requireMatch: Boolean): Episode? {
-        val metadata = tile["metadata"].obj() ?: return null
-        val tileProgram = metadata["program_id"].string()
-        // requireMatch drops a tile unless it is tagged with this program; otherwise only a tile
-        // tagged with a different program is dropped (a missing tag is kept).
-        if (if (requireMatch) tileProgram != programId else tileProgram != null && tileProgram != programId) {
-            return null
+    private fun toEpisode(tile: JsonObject, nextEpisode: () -> Int): Episode? {
+        val label = textOf(tile["title"]) ?: textOf(tile["heading"]) ?: textOf(tile["footer"].obj()?.get("title"))
+        // The coordinates usually ride in a subtitle (real shape: footer.subtitle = "S8 E24 <name>").
+        val subtitle = textOf(tile["subtitle"]) ?: textOf(tile["footer"].obj()?.get("subtitle"))
+        if (label == null && subtitle == null) return null
+        val coded = listOfNotNull(label, subtitle).joinToString(" ")
+        val match = SEASON_EPISODE.find(coded) ?: SAISON_EPISODE.find(coded)
+        val (season, episode) = if (match != null) {
+            (match.groupValues[1].toIntOrNull() ?: 1) to (match.groupValues[2].toIntOrNull() ?: nextEpisode())
+        } else {
+            1 to (EPISODE_ONLY.find(coded)?.groupValues?.get(1)?.toIntOrNull() ?: nextEpisode())
         }
-        val subtitle = tile["subtitle_formatter"].obj()?.get("format").string()
-            ?: tile["subtitle"].string()
-        val coded = subtitle?.let { SEASON_EPISODE.find(it) }
-        val episode = metadata["episode_number"].string()?.toIntOrNull()
-            ?: coded?.groupValues?.get(2)?.toIntOrNull() ?: return null
-        val season = metadata["season_number"].string()?.toIntOrNull()
-            ?: coded?.groupValues?.get(1)?.toIntOrNull() ?: 1
         return Episode(
             seasonNumber = season,
             episodeNumber = episode,
-            title = metadata["episode_title"].string()?.takeIf { it.isNotBlank() }
-                ?: subtitle?.substringAfter(" - ", "")?.takeIf { it.isNotBlank() },
+            title = episodeTitle(label, subtitle),
+            stillUrl = cardImage(tile),
         )
     }
 
-    private val IMAGE_SIZE = Regex("/(\\d+)x(\\d+)/")
-
-    /** Collect the bundle's image URLs and prefer a portrait one (the art comes in several shapes). */
-    private fun posterImage(element: JsonElement?): String? {
-        val urls = mutableListOf<String>()
-        collectUrls(element, urls)
-        return urls.firstOrNull { isPortrait(it) } ?: urls.firstOrNull()
-    }
-
-    private fun collectUrls(element: JsonElement?, out: MutableList<String>, depth: Int = 0) {
-        if (depth > MAX_DEPTH) return
-        when (element) {
-            is JsonObject -> element.values.forEach { collectUrls(it, out, depth + 1) }
-            is JsonArray -> element.forEach { collectUrls(it, out, depth + 1) }
-            is JsonPrimitive -> element.string()?.takeIf { it.startsWith("http") }?.let { out.add(it) }
-            else -> Unit
+    /**
+     * The episode's own name: the text after the "Sx Ey" coordinates in whichever field carries them
+     * (the real shape is "S8 E24 La détermination", no separator); otherwise the label as-is.
+     */
+    private fun episodeTitle(label: String?, subtitle: String?): String? {
+        for (text in listOfNotNull(subtitle, label)) {
+            val match = SEASON_EPISODE.find(text) ?: SAISON_EPISODE.find(text) ?: continue
+            text.substring(match.range.last + 1).trim(' ', '-', '·', ':', '.')
+                .takeIf { it.isNotBlank() }?.let { return it }
         }
+        val base = label ?: return null
+        return base.substringAfter(" - ", base).trim().takeIf { it.isNotBlank() }
     }
 
-    private fun isPortrait(url: String): Boolean {
-        val match = IMAGE_SIZE.find(url) ?: return false
-        // toLongOrNull: the regex allows arbitrarily long digit runs that would overflow toInt().
-        val width = match.groupValues[1].toLongOrNull() ?: return false
-        val height = match.groupValues[2].toLongOrNull() ?: return false
-        return height > width
+    // --- shared card helpers ---
+
+    // Live cards put the show title in a footer; poster cards carry none, only a tracking param.
+    private fun cardTitle(card: JsonObject, url: String): String? {
+        val text = textOf(card["title"]) ?: textOf(card["heading"])
+            ?: textOf(card["footer"].obj()?.get("title"))
+            ?: trkTitle(url)
+        return text?.takeIf { it.isNotBlank() }
     }
+
+    private fun cardImage(card: JsonObject): String? =
+        urlOf(card["picture"])
+            ?: urlOf(card["body"].obj()?.get("picture"))
+            ?: urlOf(card["image"])
+            ?: urlOf(card["image_compact"])
+
+    private fun textOf(element: JsonElement?): String? = element.obj()?.get("text").string()
+
+    private fun urlOf(element: JsonElement?): String? = element.obj()?.get("url").string()
+
+    private fun trkTitle(url: String): String? =
+        TRK_TITLE.find(url)?.groupValues?.get(1)?.let {
+            runCatching { URLDecoder.decode(it, "UTF-8") }.getOrNull()
+        }?.takeIf { it.isNotBlank() }
 }

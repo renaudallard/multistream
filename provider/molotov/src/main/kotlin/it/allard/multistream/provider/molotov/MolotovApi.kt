@@ -4,106 +4,132 @@ import it.allard.multistream.core.model.Region
 import it.allard.multistream.core.model.Season
 import it.allard.multistream.core.model.UnifiedSearchResult
 import it.allard.multistream.core.net.NetJson
+import it.allard.multistream.core.net.array
 import it.allard.multistream.core.net.await
 import it.allard.multistream.core.net.buildClient
-import it.allard.multistream.core.net.int
 import it.allard.multistream.core.net.obj
 import it.allard.multistream.core.net.string
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.UUID
 
 class MolotovApiException(message: String, val authError: Boolean = false) : Exception(message)
 
-data class MolotovTokens(val accessToken: String, val refreshToken: String?, val userId: String?)
+/** Access + refresh tokens from a Fubo sign-in or refresh. */
+data class MolotovTokens(val accessToken: String, val refreshToken: String?)
+
+/** The account and profile ids Fubo wants echoed back on authenticated content calls. */
+data class MolotovUser(val userId: String, val profileId: String)
+
+/** The bearer plus identity sent on every authenticated Fubo request. */
+data class MolotovAuth(val accessToken: String, val userId: String?, val profileId: String?)
 
 /**
- * Molotov front API client (`fapi.molotov.tv`), modeled on the working Home Assistant integration
- * at github.com/renaudallard/homeassistant_molotov_tv. Pure Kotlin (OkHttp + JSON), no Android,
- * so it is unit-testable with MockWebServer.
+ * Fubo backend client (`api-eu.fubo.tv`), the backend the current Molotov 5.51 app uses. Pure Kotlin
+ * (OkHttp + JSON), no Android, so it is unit-testable with MockWebServer. The one load-bearing header
+ * is `x-application-id: molotov`, which tells the shared Fubo backend to serve the Molotov tenant;
+ * without it the API returns no content. Modeled on the etincelle client
+ * (github.com/renaudallard/etincelle), whose contract is validated against the live API.
  */
 class MolotovApi(
     private val client: OkHttpClient = buildClient(),
-    private val baseUrl: String = "https://fapi.molotov.tv/",
-    private val language: String = "fr",
+    private val baseUrl: String = "https://api-eu.fubo.tv/",
+    // A per-instance id is enough: Fubo derives the market from the egress IP, not this header.
+    private val deviceId: String = UUID.randomUUID().toString(),
 ) {
-    suspend fun login(email: String, password: String): MolotovTokens {
+    suspend fun signin(email: String, password: String): MolotovTokens {
         val body = buildJsonObject {
-            put("grant_type", "password")
             put("email", email)
             put("password", password)
         }
-        val root = execObject(post("v3.1/auth/login", body.toString(), token = null))
-        return tokensFrom(root) ?: throw MolotovApiException("Login response missing access token")
+        val request = request(url("signin"), auth = null).put(body.toString().toRequestBody(JSON_MEDIA)).build()
+        val root = execObject(request)
+        val access = root["access_token"].string() ?: throw MolotovApiException("Sign-in response missing access token")
+        return MolotovTokens(access, root["refresh_token"].string())
+    }
+
+    suspend fun fetchUser(accessToken: String): MolotovUser {
+        val root = execObject(get(url("user"), MolotovAuth(accessToken, null, null)))
+        val data = root["data"].obj() ?: throw MolotovApiException("User response missing data")
+        val userId = data["id"].string() ?: throw MolotovApiException("User response missing id")
+        val profileId = data["profiles"].array()?.firstOrNull().obj()?.get("id").string()
+            ?: throw MolotovApiException("User response missing profile")
+        return MolotovUser(userId, profileId)
     }
 
     suspend fun refresh(refreshToken: String): MolotovTokens {
-        val root = execObject(get("v3/auth/refresh/$refreshToken", token = null))
-        return tokensFrom(root) ?: throw MolotovApiException("Refresh failed", authError = true)
+        // The refresh token rides as the bearer; no other auth headers are sent.
+        val request = request(url("refresh"), auth = null)
+            .header("authorization", "Bearer $refreshToken")
+            .post(ByteArray(0).toRequestBody(JSON_MEDIA))
+            .build()
+        val root = execObject(request)
+        val access = root["access_token"].string() ?: throw MolotovApiException("Refresh failed", authError = true)
+        return MolotovTokens(access, root["refresh_token"].string())
     }
 
-    suspend fun search(query: String, accessToken: String, region: Region): List<UnifiedSearchResult> {
-        val body = buildJsonObject { put("query", query) }
-        val root = execElement(post("v2/search", body.toString(), token = accessToken))
-        return MolotovParser.parse(root, region)
+    suspend fun search(query: String, auth: MolotovAuth, region: Region): List<UnifiedSearchResult> {
+        val root = execElement(get(url("papi/v1/search", "query" to query), auth))
+        return MolotovParser.parsePage(root, region)
     }
 
-    /**
-     * Browse a movie genre. Molotov exposes each genre as a "kind" section of its Films category (id 1);
-     * the section has its own paginated endpoint, so one genre is fetched directly without pulling the
-     * whole category. The response is the standard section/tile shape the parser already walks.
-     */
-    suspend fun browseByKind(kindSlug: String, accessToken: String, region: Region): List<UnifiedSearchResult> {
-        val root = execElement(get("v2/categories/1/sections/$kindSlug?limit=$BROWSE_LIMIT", token = accessToken))
-        return MolotovParser.parse(root, region)
+    /** Seasons and episodes from a series' catch-up ("Regarder maintenant") tab. */
+    suspend fun getSeasons(seriesId: String, auth: MolotovAuth): List<Season> {
+        val root = execElement(
+            get(url("papi/v1/program-details/series/$seriesId", "tabID" to "id-tab-watch-now"), auth),
+        )
+        return MolotovParser.parseSeasons(root)
     }
 
-    /**
-     * Seasons and episodes of a program, from its channel-scoped view page (the same navigation
-     * endpoint the official app's program tiles point to).
-     */
-    suspend fun getSeasons(channelId: String, programId: String, accessToken: String): List<Season> {
-        val root = execElement(get("v2/channels/$channelId/programs/$programId/view", token = accessToken))
-        return MolotovParser.parseSeasons(root, programId)
+    private fun url(path: String, vararg query: Pair<String, String>): HttpUrl {
+        val builder = baseUrl.toHttpUrl().newBuilder()
+        path.split('/').filter { it.isNotEmpty() }.forEach { builder.addPathSegment(it) }
+        query.forEach { (key, value) -> builder.addQueryParameter(key, value) }
+        return builder.build()
     }
 
-    private fun tokensFrom(root: JsonObject): MolotovTokens? {
-        val auth = root["auth"].obj() ?: root
-        val access = auth["access_token"].string() ?: return null
-        val refresh = auth["refresh_token"].string()
-        val account = root["account"].obj()
-        val userId = account?.get("id").string() ?: account?.get("id").int()?.toString()
-        return MolotovTokens(access, refresh, userId)
-    }
+    private fun get(url: HttpUrl, auth: MolotovAuth?): Request = request(url, auth).get().build()
 
-    private fun get(path: String, token: String?): Request = baseRequest(path, token).get().build()
-
-    private fun post(path: String, jsonBody: String, token: String?): Request =
-        baseRequest(path, token).post(jsonBody.toRequestBody(JSON_MEDIA)).build()
-
-    private fun baseRequest(path: String, token: String?): Request.Builder {
+    /** Adds the Fubo client and device headers (and the bearer plus ids when [auth] is set). */
+    private fun request(url: HttpUrl, auth: MolotovAuth?): Request.Builder {
         val builder = Request.Builder()
-            .url(baseUrl + path)
-            .header("User-Agent", "Android")
-            .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
-            .header("Accept-Language", language)
-            .header("orientation", "portrait")
-            .header("logged_in", if (token != null) "true" else "false")
-            .header("X-Molotov-Agent", MOLOTOV_AGENT)
-        if (token != null) builder.header("Authorization", "Bearer $token")
+            .url(url)
+            .header("user-agent", USER_AGENT)
+            .header("x-application-id", APPLICATION_ID)
+            .header("x-client-version", CLIENT_VERSION)
+            .header("x-os", "android")
+            .header("x-os-version", OS_VERSION)
+            .header("x-device-app", "android")
+            .header("x-device-platform", "android_phone")
+            .header("x-device-type", "phone")
+            .header("x-device-group", "mobile")
+            .header("x-device-brand", "android")
+            .header("x-device-model", "android")
+            .header("x-device-id", deviceId)
+            .header("x-preferred-language", "fr-FR")
+            .header("x-supported-streaming-protocols", "hls,dash")
+            .header("x-drm-scheme", "widevine")
+            .header("x-supported-features", SUPPORTED_FEATURES)
+        if (auth != null) {
+            builder.header("authorization", "Bearer ${auth.accessToken}")
+            auth.userId?.takeIf { it.isNotBlank() }?.let { builder.header("x-user-id", it) }
+            auth.profileId?.takeIf { it.isNotBlank() }?.let { builder.header("x-profile-id", it) }
+        }
         return builder
     }
 
     private suspend fun execElement(request: Request): JsonElement {
         client.await(request).use { response ->
             val text = response.body?.string().orEmpty()
-            if (response.code == 401) throw MolotovApiException("Unauthorized", authError = true)
+            if (response.code == 401 || response.code == 403) throw MolotovApiException("Unauthorized", authError = true)
             if (!response.isSuccessful) throw MolotovApiException("HTTP ${response.code}")
             return NetJson.parseToJsonElement(text)
         }
@@ -113,17 +139,15 @@ class MolotovApi(
         execElement(request).obj() ?: throw MolotovApiException("Expected a JSON object response")
 
     private companion object {
-        const val BROWSE_LIMIT = 30
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
+        const val APPLICATION_ID = "molotov"
+        const val CLIENT_VERSION = "5.51.0"
+        const val OS_VERSION = "16"
+        const val USER_AGENT = "MolotovTV/5.51.0 (Linux; U; ANDROID; fr-FR; multistream)"
 
-        // Identity header from the working HA integration (proven against the live API).
-        const val MOLOTOV_AGENT =
-            "{\"app_name\":\"Molotov\",\"app_version_name\":\"4.27.0\",\"app_id\":\"android_tv_app\"," +
-                "\"api_version\":8,\"advertising_id\":null,\"app_build\":8881,\"os\":\"Android\"," +
-                "\"os_version\":\"12\",\"os_sdk_version\":31,\"rating\":\"HIGH\",\"type\":\"tv\"," +
-                "\"features_supported\":[],\"screen_reader_enabled\":false,\"model\":\"HA\"," +
-                "\"device\":\"Molotov HA\",\"brand\":\"Molotov\",\"manufacturer\":\"Molotov\"," +
-                "\"display\":\"Molotov HA\",\"serial\":null,\"serial_software\":null," +
-                "\"store\":\"google\",\"rooted\":false}"
+        // `use_drm_v2_response` and the playback features are what the real app advertises; harmless
+        // here (multistream never resolves a stream) but kept so the backend treats us as the app.
+        const val SUPPORTED_FEATURES =
+            "use_drm_v2_response,playback_template_v2,play_start_from_offset,load_channels_in_guide"
     }
 }
