@@ -30,6 +30,7 @@ The interface is available in English and French, following the device language.
 
 ## Contents
 
+- [Screenshots](#screenshots)
 - [How it works](#how-it-works)
 - [Services and capabilities](#services-and-capabilities)
 - [Episodes and watched state](#episodes-and-watched-state)
@@ -39,6 +40,18 @@ The interface is available in English and French, following the device language.
 - [Build and run](#build-and-run)
 - [Testing and verification](#testing-and-verification)
 - [Legal / personal use](#legal--personal-use)
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/search.png" width="19%" alt="One search across every service">
+  <img src="docs/screenshots/genre.png" width="19%" alt="Browse by genre, no typing">
+  <img src="docs/screenshots/detail.png" width="19%" alt="Title detail, launch and track">
+  <img src="docs/screenshots/settings.png" width="19%" alt="Per-provider settings and login">
+  <img src="docs/screenshots/home.png" width="19%" alt="Search home with genre chips">
+</p>
+
+<p align="center"><sub>Federated search · genre browse · title detail · per-provider settings · home. The interface follows the device language (shown here in French).</sub></p>
 
 ## How it works
 
