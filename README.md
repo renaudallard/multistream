@@ -266,3 +266,6 @@ not need an Android runtime is verified here: a working APK plus the JVM tests a
 
 For personal use with your own accounts. The app never bypasses DRM: playback always happens inside
 the official app. multistream only queries catalogs and fires a deep-link intent.
+
+See [PRIVACY.md](docs/PRIVACY.md) for the privacy policy: the app has no backend, keeps credentials
+and watch history on-device, and ships no analytics, ads, or tracking.
